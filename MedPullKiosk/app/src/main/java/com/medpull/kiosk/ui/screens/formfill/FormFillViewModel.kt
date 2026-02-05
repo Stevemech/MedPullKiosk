@@ -1,0 +1,234 @@
+package com.medpull.kiosk.ui.screens.formfill
+
+import android.util.Log
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.medpull.kiosk.data.models.FormField
+import com.medpull.kiosk.data.repository.FormRepository
+import com.medpull.kiosk.data.repository.TranslationRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+/**
+ * ViewModel for form filling screen
+ */
+@HiltViewModel
+class FormFillViewModel @Inject constructor(
+    private val formRepository: FormRepository,
+    private val translationRepository: TranslationRepository,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+
+    companion object {
+        private const val TAG = "FormFillViewModel"
+    }
+
+    private val formId: String = savedStateHandle.get<String>("formId") ?: ""
+
+    private val _state = MutableStateFlow(FormFillState())
+    val state: StateFlow<FormFillState> = _state.asStateFlow()
+
+    init {
+        loadForm()
+    }
+
+    /**
+     * Load form and fields
+     */
+    private fun loadForm() {
+        viewModelScope.launch {
+            try {
+                formRepository.getFormByIdFlow(formId)
+                    .catch { e ->
+                        Log.e(TAG, "Error loading form", e)
+                        _state.update { it.copy(error = "Failed to load form: ${e.message}") }
+                    }
+                    .collect { form ->
+                        if (form != null) {
+                            _state.update {
+                                it.copy(
+                                    form = form,
+                                    fields = form.fields,
+                                    isLoading = false,
+                                    completionPercentage = calculateCompletionPercentage(form.fields)
+                                )
+                            }
+                        } else {
+                            _state.update {
+                                it.copy(
+                                    error = "Form not found",
+                                    isLoading = false
+                                )
+                            }
+                        }
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading form", e)
+                _state.update {
+                    it.copy(
+                        error = "Failed to load form: ${e.message}",
+                        isLoading = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Select a field for editing
+     */
+    fun selectField(field: FormField) {
+        _state.update { it.copy(selectedField = field) }
+    }
+
+    /**
+     * Clear field selection
+     */
+    fun clearFieldSelection() {
+        _state.update { it.copy(selectedField = null) }
+    }
+
+    /**
+     * Update field value
+     */
+    fun updateFieldValue(fieldId: String, value: String) {
+        viewModelScope.launch {
+            try {
+                formRepository.updateFieldValue(fieldId, value)
+
+                // Update local state
+                val updatedFields = _state.value.fields.map { field ->
+                    if (field.id == fieldId) {
+                        field.copy(value = value)
+                    } else {
+                        field
+                    }
+                }
+
+                _state.update {
+                    it.copy(
+                        fields = updatedFields,
+                        selectedField = null,
+                        completionPercentage = calculateCompletionPercentage(updatedFields)
+                    )
+                }
+
+                Log.d(TAG, "Field value updated: $fieldId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating field value", e)
+                _state.update { it.copy(error = "Failed to update field: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Translate field text
+     */
+    fun translateField(field: FormField, targetLanguage: String) {
+        viewModelScope.launch {
+            try {
+                val originalText = field.fieldName
+                val translatedText = translationRepository.translateText(
+                    text = originalText,
+                    targetLanguage = targetLanguage
+                )
+
+                // Update field in database and local state
+                val updatedFields = _state.value.fields.map { f ->
+                    if (f.id == field.id) {
+                        f.copy(translatedText = translatedText)
+                    } else {
+                        f
+                    }
+                }
+
+                _state.update { it.copy(fields = updatedFields) }
+
+                Log.d(TAG, "Field translated: ${field.fieldName} -> $translatedText")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error translating field", e)
+                _state.update { it.copy(error = "Translation failed: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Calculate form completion percentage
+     */
+    private fun calculateCompletionPercentage(fields: List<FormField>): Float {
+        if (fields.isEmpty()) return 0f
+        val filledCount = fields.count { !it.value.isNullOrBlank() }
+        return (filledCount.toFloat() / fields.size) * 100f
+    }
+
+    /**
+     * Save and exit
+     */
+    fun saveAndExit() {
+        viewModelScope.launch {
+            try {
+                // All field updates are already saved in real-time
+                // Just mark form as ready to export if all required fields filled
+                val allRequiredFilled = formRepository.areAllRequiredFieldsFilled(formId)
+
+                if (allRequiredFilled) {
+                    formRepository.updateFormStatus(
+                        formId,
+                        com.medpull.kiosk.data.models.FormStatus.COMPLETED
+                    )
+                }
+
+                _state.update { it.copy(shouldNavigateBack = true) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving form", e)
+                _state.update { it.copy(error = "Failed to save: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Clear error
+     */
+    fun clearError() {
+        _state.update { it.copy(error = null) }
+    }
+
+    /**
+     * Reset navigation flag
+     */
+    fun resetNavigation() {
+        _state.update { it.copy(shouldNavigateBack = false) }
+    }
+
+    /**
+     * Set current page
+     */
+    fun setCurrentPage(page: Int) {
+        _state.update { it.copy(currentPage = page) }
+    }
+
+    /**
+     * Toggle field overlay visibility
+     */
+    fun toggleFieldOverlays() {
+        _state.update { it.copy(showFieldOverlays = !it.showFieldOverlays) }
+    }
+}
+
+/**
+ * Form fill UI state
+ */
+data class FormFillState(
+    val form: com.medpull.kiosk.data.models.Form? = null,
+    val fields: List<FormField> = emptyList(),
+    val selectedField: FormField? = null,
+    val currentPage: Int = 0,
+    val showFieldOverlays: Boolean = true,
+    val completionPercentage: Float = 0f,
+    val isLoading: Boolean = true,
+    val error: String? = null,
+    val shouldNavigateBack: Boolean = false
+)

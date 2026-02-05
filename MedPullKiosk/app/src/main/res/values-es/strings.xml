@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Info -->
+    <string name="app_name">MedPull Kiosk</string>
+    <string name="app_title">MedPull</string>
+    <string name="app_tagline">Atención médica simplificada</string>
+
+    <!-- Welcome Screen -->
+    <string name="welcome_back">¡Bienvenido de nuevo!</string>
+    <string name="get_started">Comenzar</string>
+    <string name="welcome_message">¡Bienvenido! Toque a continuación para comenzar a completar sus formularios médicos.</string>
+    <string name="features_text">Disponible en 6 idiomas | Cumple con HIPAA | Seguro</string>
+
+    <!-- Language Selection -->
+    <string name="select_language">Idioma</string>
+    <string name="choose_language">Elige tu idioma</string>
+
+    <!-- Authentication -->
+    <string name="login">Iniciar sesión</string>
+    <string name="register">Crear cuenta</string>
+    <string name="logout">Cerrar sesión</string>
+    <string name="email">Correo electrónico</string>
+    <string name="password">Contraseña</string>
+    <string name="confirm_password">Confirmar contraseña</string>
+    <string name="forgot_password">¿Olvidó su contraseña?</string>
+    <string name="already_have_account">¿Ya tienes una cuenta?</string>
+    <string name="dont_have_account">¿No tienes una cuenta?</string>
+
+    <!-- Form Management -->
+    <string name="upload_form">Subir un formulario</string>
+    <string name="upload_header">Subir</string>
+    <string name="upload_document_title">Subir documento</string>
+    <string name="select_document_subtitle">Seleccione un formulario o documento médico para subir</string>
+    <string name="previous_forms">Formularios anteriores</string>
+    <string name="view_previous_forms">Ver tus formularios subidos</string>
+    <string name="start_processing">Comience a procesar documentos</string>
+    <string name="take_photo">Tomar foto</string>
+    <string name="take_photo_sub">Usa tu cámara</string>
+    <string name="choose_from_files">Elegir desde archivos</string>
+    <string name="choose_from_files_sub">Seleccione un documento PDF</string>
+
+    <!-- Form Filling -->
+    <string name="fill_out_extracted_fields">Complete los campos extraídos</string>
+    <string name="form_fields_label">Campos del formulario:</string>
+    <string name="field_name">Nombre del campo</string>
+    <string name="field_value">Valor del campo</string>
+    <string name="enter_value">Ingresar</string>
+    <string name="save">Guardar</string>
+    <string name="cancel">Cancelar</string>
+
+    <!-- PDF Export -->
+    <string name="generate_filled_pdf">Generar PDF completado</string>
+    <string name="export_pdf">Exportar PDF</string>
+    <string name="export_success">Formulario exportado correctamente</string>
+
+    <!-- AI Assistance -->
+    <string name="ai_copilot">Copiloto de IA</string>
+    <string name="ai_subtitle">Chatea y traduce con OpenAI</string>
+    <string name="ask_ai_chat">Preguntar a IA</string>
+    <string name="ai_greeting">¡Hola! ¡Siéntete libre de preguntarme sobre cualquier pregunta del formulario!</string>
+
+    <!-- Security & Compliance -->
+    <string name="hipaa_secure">Cumple con HIPAA y seguro</string>
+    <string name="secure_note_upload">Los archivos se cargan de forma segura en su almacenamiento compatible con HIPAA</string>
+
+    <!-- Autofill -->
+    <string name="manage_autofill">Administrar autocompletar</string>
+    <string name="secure_autofill">Autocompletar seguro</string>
+    <string name="autofill_info">Tus datos de autocompletado se cifran y se almacenan de forma segura en AWS compatible con HIPAA. Esta información se utilizará para completar formularios de manera inteligente.</string>
+    <string name="your_autofill_info">Tu información de autocompletado</string>
+    <string name="no_autofill_yet">Aún no hay datos de autocompletado</string>
+
+    <!-- Errors -->
+    <string name="error">Error</string>
+    <string name="failed_to_take_photo">No se pudo tomar la foto. Inténtalo de nuevo.</string>
+    <string name="failed_to_pick_document">No se pudo seleccionar el documento</string>
+    <string name="camera_permission_required">Se requiere permiso de cámara</string>
+    <string name="camera_permission_body">Permita el acceso a la cámara para tomar fotos de documentos.</string>
+    <string name="invalid_input_title">Entrada no válida</string>
+    <string name="invalid_input_body">Ingrese el nombre y el valor del campo</string>
+
+    <!-- Success Messages -->
+    <string name="save_success_title">Éxito</string>
+    <string name="save_success_body">Tu información de autocompletado se ha guardado de forma segura.</string>
+    <string name="save_error_body">No se pudo guardar su información. Inténtelo de nuevo.</string>
+
+    <!-- Loading -->
+    <string name="loading">Cargando...</string>
+    <string name="loading_autofill">Cargando datos de autocompletado...</string>
+    <string name="processing">Procesando...</string>
+
+    <!-- Session -->
+    <string name="session_timeout_warning">Su sesión expirará pronto debido a la inactividad</string>
+    <string name="session_expired">Sesión expirada</string>
+    <string name="session_expired_message">Su sesión ha expirado. Por favor, inicie sesión de nuevo.</string>
+
+    <!-- Common -->
+    <string name="ok">Aceptar</string>
+    <string name="yes">Sí</string>
+    <string name="no">No</string>
+    <string name="delete">Eliminar</string>
+    <string name="confirm">Confirmar</string>
+    <string name="back">Atrás</string>
+    <string name="next">Siguiente</string>
+    <string name="done">Hecho</string>
+</resources>

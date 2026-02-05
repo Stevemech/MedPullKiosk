@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base configuration for all connections -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Certificate pinning for AWS endpoints -->
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- AWS API Gateway -->
+        <domain includeSubdomains="true">execute-api.us-east-1.amazonaws.com</domain>
+        <!-- AWS S3 -->
+        <domain includeSubdomains="true">s3.us-east-1.amazonaws.com</domain>
+        <domain includeSubdomains="true">medpull-hipaa-files-1759818639.s3.amazonaws.com</domain>
+        <!-- AWS Cognito -->
+        <domain includeSubdomains="true">cognito-idp.us-east-1.amazonaws.com</domain>
+        <!-- AWS Textract -->
+        <domain includeSubdomains="true">textract.us-east-1.amazonaws.com</domain>
+        <!-- AWS Translate -->
+        <domain includeSubdomains="true">translate.us-east-1.amazonaws.com</domain>
+
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+
+        <pin-set expiration="2027-01-01">
+            <!-- Amazon Root CA 1 -->
+            <pin digest="SHA-256">++MBgDH5WGvL9Bcn5Be30cRcL0f5O+NyoXuWtQdX1aI=</pin>
+            <!-- Starfield Services Root Certificate Authority - G2 -->
+            <pin digest="SHA-256">gI1os/q0iEpflxrOfRBVDXqVoWN3Tz7Dav/7IT++THQ=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- OpenAI API -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.openai.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Claude API -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.anthropic.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Debug configuration (only for debug builds) -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+            <certificates src="system" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

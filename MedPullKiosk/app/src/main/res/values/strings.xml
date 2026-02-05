@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Info -->
+    <string name="app_name">MedPull Kiosk</string>
+    <string name="app_title">MedPull</string>
+    <string name="app_tagline">Healthcare Made Simple</string>
+
+    <!-- Welcome Screen -->
+    <string name="welcome_back">Welcome back!</string>
+    <string name="get_started">Get Started</string>
+    <string name="welcome_message">Welcome! Tap below to get started filling out your medical forms.</string>
+    <string name="features_text">Available in 6 languages | HIPAA Compliant | Secure</string>
+
+    <!-- Language Selection -->
+    <string name="select_language">Language</string>
+    <string name="choose_language">Choose your language</string>
+
+    <!-- Authentication -->
+    <string name="login">Log In</string>
+    <string name="register">Create Account</string>
+    <string name="logout">Log Out</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="confirm_password">Confirm Password</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="already_have_account">Already have an account?</string>
+    <string name="dont_have_account">Don\'t have an account?</string>
+
+    <!-- Form Management -->
+    <string name="upload_form">Upload a Form</string>
+    <string name="upload_header">Upload</string>
+    <string name="upload_document_title">Upload Document</string>
+    <string name="select_document_subtitle">Select a medical form or document to upload</string>
+    <string name="previous_forms">Previous Forms</string>
+    <string name="view_previous_forms">View your uploaded forms</string>
+    <string name="start_processing">Start processing documents</string>
+    <string name="take_photo">Take Photo</string>
+    <string name="take_photo_sub">Use your camera</string>
+    <string name="choose_from_files">Choose from Files</string>
+    <string name="choose_from_files_sub">Select a PDF document</string>
+
+    <!-- Form Filling -->
+    <string name="fill_out_extracted_fields">Fill Out Extracted Fields</string>
+    <string name="form_fields_label">Form Fields:</string>
+    <string name="field_name">Field Name</string>
+    <string name="field_value">Field Value</string>
+    <string name="enter_value">Enter</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- PDF Export -->
+    <string name="generate_filled_pdf">Generate Filled PDF</string>
+    <string name="export_pdf">Export PDF</string>
+    <string name="export_success">Form exported successfully</string>
+
+    <!-- AI Assistance -->
+    <string name="ai_copilot">AI Copilot</string>
+    <string name="ai_subtitle">Chat and translate with OpenAI</string>
+    <string name="ask_ai_chat">Ask AI</string>
+    <string name="ai_greeting">Hi! Feel free to ask me about any form questions!</string>
+
+    <!-- Security & Compliance -->
+    <string name="hipaa_secure">HIPAA Compliant &amp; Secure</string>
+    <string name="secure_note_upload">Files are securely uploaded to your HIPAA-compliant storage</string>
+
+    <!-- Autofill -->
+    <string name="manage_autofill">Manage Autofill Data</string>
+    <string name="secure_autofill">Secure Autofill</string>
+    <string name="autofill_info">Your autofill data is encrypted and stored securely in HIPAA‑compliant AWS storage. This information will be used to intelligently prefill forms.</string>
+    <string name="your_autofill_info">Your Autofill Information</string>
+    <string name="no_autofill_yet">No autofill data yet</string>
+
+    <!-- Errors -->
+    <string name="error">Error</string>
+    <string name="failed_to_take_photo">Failed to take photo. Please try again.</string>
+    <string name="failed_to_pick_document">Failed to pick document</string>
+    <string name="camera_permission_required">Camera Permission Required</string>
+    <string name="camera_permission_body">Please allow camera access to take photos of documents.</string>
+    <string name="invalid_input_title">Invalid Input</string>
+    <string name="invalid_input_body">Please enter both field name and value</string>
+
+    <!-- Success Messages -->
+    <string name="save_success_title">Success</string>
+    <string name="save_success_body">Your autofill information has been saved securely.</string>
+    <string name="save_error_body">Failed to save your information. Please try again.</string>
+
+    <!-- Loading -->
+    <string name="loading">Loading...</string>
+    <string name="loading_autofill">Loading autofill data...</string>
+    <string name="processing">Processing...</string>
+
+    <!-- Session -->
+    <string name="session_timeout_warning">Your session will expire soon due to inactivity</string>
+    <string name="session_timeout_warning_title">Session Timeout Warning</string>
+    <string name="session_timeout_warning_message">Your session will expire soon due to inactivity. Would you like to continue?</string>
+    <string name="session_expired">Session Expired</string>
+    <string name="session_expired_message">Your session has expired. Please log in again.</string>
+    <string name="time_remaining">Time Remaining</string>
+    <string name="continue_session">Continue Session</string>
+
+    <!-- Common -->
+    <string name="ok">OK</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="delete">Delete</string>
+    <string name="confirm">Confirm</string>
+    <string name="back">Back</string>
+    <string name="next">Next</string>
+    <string name="done">Done</string>
+</resources>
