@@ -1,5 +1,6 @@
 package com.medpull.kiosk.di
 
+import com.amazonaws.auth.CognitoCachingCredentialsProvider
 import com.google.gson.Gson
 import com.medpull.kiosk.data.local.dao.AuditLogDao
 import com.medpull.kiosk.data.local.dao.FormDao
@@ -32,9 +33,10 @@ object RepositoryModule {
     fun provideAuthRepository(
         userDao: UserDao,
         secureStorageManager: SecureStorageManager,
-        cognitoAuthService: CognitoAuthServiceV2
+        cognitoAuthService: CognitoAuthServiceV2,
+        credentialsProvider: CognitoCachingCredentialsProvider
     ): AuthRepository {
-        return AuthRepository(userDao, secureStorageManager, cognitoAuthService)
+        return AuthRepository(userDao, secureStorageManager, cognitoAuthService, credentialsProvider)
     }
 
     @Provides
@@ -45,9 +47,10 @@ object RepositoryModule {
         s3Service: S3Service,
         textractService: TextractService,
         networkMonitor: NetworkMonitor,
-        syncManager: SyncManager
+        syncManager: SyncManager,
+        authRepository: AuthRepository
     ): FormRepository {
-        return FormRepository(formDao, formFieldDao, s3Service, textractService, networkMonitor, syncManager)
+        return FormRepository(formDao, formFieldDao, s3Service, textractService, networkMonitor, syncManager, authRepository)
     }
 
     @Provides

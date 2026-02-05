@@ -165,13 +165,52 @@ class CognitoAuthServiceV2 @Inject constructor(
     }
 
     /**
-     * Refresh access token
+     * Refresh access token using refresh token
      */
-    suspend fun refreshSession(email: String, refreshToken: String): CognitoUserSession? {
-        return try {
-            getCurrentSession(email)
+    suspend fun refreshSession(email: String): CognitoUserSession? = suspendCancellableCoroutine { continuation ->
+        try {
+            val cognitoUser = userPool.getUser(email)
+
+            cognitoUser.getSession(object : AuthenticationHandler {
+                override fun onSuccess(userSession: CognitoUserSession?, newDevice: CognitoDevice?) {
+                    if (userSession != null) {
+                        Log.d(TAG, "Session refreshed successfully for: $email")
+                        continuation.resume(userSession)
+                    } else {
+                        Log.e(TAG, "Session refresh returned null session")
+                        continuation.resume(null)
+                    }
+                }
+
+                override fun getAuthenticationDetails(
+                    authenticationContinuation: AuthenticationContinuation?,
+                    userId: String?
+                ) {
+                    // Not needed for session refresh
+                    Log.e(TAG, "Unexpected: getAuthenticationDetails called during refresh")
+                    continuation.resume(null)
+                }
+
+                override fun getMFACode(multiFactorAuthenticationContinuation: MultiFactorAuthenticationContinuation?) {
+                    // Not needed for session refresh
+                    Log.e(TAG, "Unexpected: getMFACode called during refresh")
+                    continuation.resume(null)
+                }
+
+                override fun authenticationChallenge(challengeContinuation: ChallengeContinuation?) {
+                    // Not needed for session refresh
+                    Log.e(TAG, "Unexpected: authenticationChallenge called during refresh")
+                    continuation.resume(null)
+                }
+
+                override fun onFailure(exception: Exception?) {
+                    Log.e(TAG, "Failed to refresh session for: $email", exception)
+                    continuation.resume(null)
+                }
+            })
         } catch (e: Exception) {
-            null
+            Log.e(TAG, "Error refreshing session", e)
+            continuation.resume(null)
         }
     }
 

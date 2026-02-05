@@ -26,6 +26,7 @@ android {
         buildConfigField("String", "AWS_REGION", "\"us-east-1\"")
         buildConfigField("String", "AWS_USER_POOL_ID", "\"us-east-1_j8Y6JrLF7\"")
         buildConfigField("String", "AWS_CLIENT_ID", "\"12jt58o6hmamb7hsadcrljgo1j\"")
+        buildConfigField("String", "AWS_IDENTITY_POOL_ID", "\"us-east-1:cb9498d1-1713-4e00-a4eb-2c8b10885d32\"")
         buildConfigField("String", "AWS_API_ENDPOINT", "\"https://d40uuum7hj.execute-api.us-east-1.amazonaws.com/prod\"")
         buildConfigField("String", "AWS_S3_BUCKET", "\"medpull-hipaa-files-1759818639\"")
 

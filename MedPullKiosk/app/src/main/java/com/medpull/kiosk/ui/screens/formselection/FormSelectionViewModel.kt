@@ -8,6 +8,7 @@ import com.medpull.kiosk.data.models.FormStatus
 import com.medpull.kiosk.data.repository.AuthRepository
 import com.medpull.kiosk.data.repository.FormProcessResult
 import com.medpull.kiosk.data.repository.FormRepository
+import com.medpull.kiosk.utils.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -68,6 +69,18 @@ class FormSelectionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _state.update { it.copy(isUploading = true, uploadProgress = 0f, error = null) }
+
+                // Validate file size
+                val fileSizeMB = file.length() / (1024.0 * 1024.0)
+                if (fileSizeMB > Constants.Pdf.MAX_FILE_SIZE_MB) {
+                    _state.update {
+                        it.copy(
+                            isUploading = false,
+                            error = "File size (${String.format("%.2f", fileSizeMB)} MB) exceeds maximum allowed size (${Constants.Pdf.MAX_FILE_SIZE_MB} MB)"
+                        )
+                    }
+                    return@launch
+                }
 
                 val userId = authRepository.getCurrentUserId()
                 if (userId == null) {

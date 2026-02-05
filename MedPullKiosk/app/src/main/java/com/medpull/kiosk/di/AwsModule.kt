@@ -1,6 +1,7 @@
 package com.medpull.kiosk.di
 
 import android.content.Context
+import com.amazonaws.ClientConfiguration
 import com.amazonaws.auth.CognitoCachingCredentialsProvider
 import com.amazonaws.mobileconnectors.cognitoidentityprovider.CognitoUserPool
 import com.amazonaws.regions.Region
@@ -49,12 +50,9 @@ object AwsModule {
         @ApplicationContext context: Context,
         awsRegion: Regions
     ): CognitoCachingCredentialsProvider {
-        // This will be updated with Identity Pool ID when users authenticate
-        // For now, create with a placeholder identity pool (will be configured per user)
-        // Note: This should be replaced with actual identity pool ID in production
         return CognitoCachingCredentialsProvider(
             context,
-            "us-east-1:00000000-0000-0000-0000-000000000000", // Placeholder identity pool ID
+            Constants.AWS.IDENTITY_POOL_ID,
             awsRegion
         )
     }
@@ -65,9 +63,24 @@ object AwsModule {
         credentialsProvider: CognitoCachingCredentialsProvider,
         awsRegion: Regions
     ): AmazonS3Client {
+        // Configure client with timeouts, retry policy, and connection pooling
+        val clientConfiguration = ClientConfiguration().apply {
+            // Connection timeout: time to establish connection (30 seconds)
+            connectionTimeout = Constants.Network.CONNECT_TIMEOUT_SECONDS.toInt() * 1000
+
+            // Socket timeout: time to wait for data (60 seconds)
+            socketTimeout = Constants.Network.READ_TIMEOUT_SECONDS.toInt() * 1000
+
+            // Max retry attempts (AWS SDK automatically uses exponential backoff)
+            maxErrorRetry = Constants.Network.MAX_RETRY_ATTEMPTS
+
+            // Max concurrent connections (prevent resource exhaustion)
+            maxConnections = 10
+        }
+
         val s3Client = AmazonS3Client(
             credentialsProvider,
-            Region.getRegion(awsRegion)
+            clientConfiguration
         )
         s3Client.setRegion(Region.getRegion(awsRegion))
         return s3Client

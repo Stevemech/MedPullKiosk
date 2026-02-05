@@ -7,6 +7,7 @@ import javax.inject.Inject
 
 /**
  * ViewModel for Welcome screen
+ * Kiosk mode: No session restoration, each user starts fresh
  */
 @HiltViewModel
 class WelcomeViewModel @Inject constructor(

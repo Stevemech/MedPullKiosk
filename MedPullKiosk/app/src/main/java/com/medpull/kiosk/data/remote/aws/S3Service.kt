@@ -1,5 +1,7 @@
 package com.medpull.kiosk.data.remote.aws
 
+import android.util.Log
+import com.amazonaws.AmazonServiceException
 import com.amazonaws.services.s3.AmazonS3Client
 import com.amazonaws.services.s3.model.GetObjectRequest
 import com.amazonaws.services.s3.model.ObjectMetadata
@@ -12,7 +14,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.UUID
 import javax.inject.Inject
@@ -27,7 +28,47 @@ class S3Service @Inject constructor(
     private val s3Client: AmazonS3Client
 ) {
 
+    companion object {
+        private const val TAG = "S3Service"
+    }
+
     private val bucketName = Constants.AWS.S3_BUCKET
+
+    /**
+     * Handle AWS service exceptions with specific error messages
+     */
+    private fun handleAwsException(e: Exception, operation: String): String {
+        return when (e) {
+            is AmazonServiceException -> {
+                when (e.statusCode) {
+                    401, 403 -> {
+                        Log.e(TAG, "$operation: Access denied - credentials may be invalid or expired", e)
+                        "Access denied. Please try logging in again."
+                    }
+                    404 -> {
+                        Log.e(TAG, "$operation: Resource not found", e)
+                        "File not found."
+                    }
+                    429, 503 -> {
+                        Log.e(TAG, "$operation: Service throttled or unavailable", e)
+                        "Service temporarily unavailable. Please try again."
+                    }
+                    500, 502, 504 -> {
+                        Log.e(TAG, "$operation: Server error", e)
+                        "Server error. Please try again later."
+                    }
+                    else -> {
+                        Log.e(TAG, "$operation: AWS error (${e.statusCode}): ${e.errorMessage}", e)
+                        "Upload failed: ${e.errorMessage}"
+                    }
+                }
+            }
+            else -> {
+                Log.e(TAG, "$operation: Unexpected error", e)
+                e.message ?: "Operation failed"
+            }
+        }
+    }
 
     /**
      * Upload file to S3 with progress tracking
@@ -51,13 +92,10 @@ class S3Service @Inject constructor(
                 addUserMetadata("upload-timestamp", System.currentTimeMillis().toString())
             }
 
-            // Create put request
-            val putRequest = PutObjectRequest(
-                bucketName,
-                s3Key,
-                FileInputStream(file),
-                metadata
-            )
+            // Create put request using File directly (AWS SDK handles retries automatically)
+            val putRequest = PutObjectRequest(bucketName, s3Key, file).apply {
+                setMetadata(metadata)
+            }
 
             // Upload with progress listener
             putRequest.setGeneralProgressListener { progressEvent ->
@@ -72,7 +110,8 @@ class S3Service @Inject constructor(
 
             emit(UploadProgress.Success(s3Key, fileName))
         } catch (e: Exception) {
-            emit(UploadProgress.Error(e.message ?: "Upload failed"))
+            val errorMessage = handleAwsException(e, "Upload file")
+            emit(UploadProgress.Error(errorMessage))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -95,18 +134,17 @@ class S3Service @Inject constructor(
                 addUserMetadata("upload-timestamp", System.currentTimeMillis().toString())
             }
 
-            val putRequest = PutObjectRequest(
-                bucketName,
-                s3Key,
-                FileInputStream(file),
-                metadata
-            )
+            // Use File directly (AWS SDK handles retries by reopening the file)
+            val putRequest = PutObjectRequest(bucketName, s3Key, file).apply {
+                setMetadata(metadata)
+            }
 
             s3Client.putObject(putRequest)
 
             UploadResult.Success(s3Key, fileName)
         } catch (e: Exception) {
-            UploadResult.Error(e.message ?: "Upload failed")
+            val errorMessage = handleAwsException(e, "Upload file sync")
+            UploadResult.Error(errorMessage)
         }
     }
 
@@ -130,7 +168,8 @@ class S3Service @Inject constructor(
 
             DownloadResult.Success(destinationFile.absolutePath)
         } catch (e: Exception) {
-            DownloadResult.Error(e.message ?: "Download failed")
+            val errorMessage = handleAwsException(e, "Download file")
+            DownloadResult.Error(errorMessage)
         }
     }
 
@@ -169,7 +208,8 @@ class S3Service @Inject constructor(
 
             emit(DownloadProgress.Success(destinationFile.absolutePath))
         } catch (e: Exception) {
-            emit(DownloadProgress.Error(e.message ?: "Download failed"))
+            val errorMessage = handleAwsException(e, "Download file with progress")
+            emit(DownloadProgress.Error(errorMessage))
         }
     }.flowOn(Dispatchers.IO)
 

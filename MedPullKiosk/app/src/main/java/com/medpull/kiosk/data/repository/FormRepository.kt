@@ -34,7 +34,8 @@ class FormRepository @Inject constructor(
     private val s3Service: S3Service,
     private val textractService: TextractService,
     private val networkMonitor: NetworkMonitor,
-    private val syncManager: SyncManager
+    private val syncManager: SyncManager,
+    private val authRepository: AuthRepository
 ) {
 
     companion object {
@@ -125,6 +126,13 @@ class FormRepository @Inject constructor(
         userId: String,
         formId: String
     ): FormProcessResult {
+        // Check if user is still authenticated
+        if (!authRepository.isAuthenticated()) {
+            Log.e(TAG, "Upload cancelled: user not authenticated")
+            updateFormStatus(formId, FormStatus.ERROR)
+            return FormProcessResult.Error("Upload cancelled: Please log in again")
+        }
+
         // Check if online
         if (!networkMonitor.isCurrentlyConnected()) {
             Log.d(TAG, "Offline: queuing form processing for $formId")
@@ -147,6 +155,14 @@ class FormRepository @Inject constructor(
             return FormProcessResult.QueuedForSync(
                 "Form will be processed when online"
             )
+        }
+
+        // Refresh tokens if needed before AWS operations
+        val tokensValid = authRepository.refreshTokensIfNeeded()
+        if (!tokensValid) {
+            Log.e(TAG, "Failed to refresh tokens for upload")
+            updateFormStatus(formId, FormStatus.ERROR)
+            return FormProcessResult.Error("Session expired. Please log in again")
         }
 
         // Upload to S3

@@ -12,6 +12,7 @@ object Constants {
         const val REGION = BuildConfig.AWS_REGION
         const val USER_POOL_ID = BuildConfig.AWS_USER_POOL_ID
         const val CLIENT_ID = BuildConfig.AWS_CLIENT_ID
+        const val IDENTITY_POOL_ID = BuildConfig.AWS_IDENTITY_POOL_ID
         const val API_ENDPOINT = BuildConfig.AWS_API_ENDPOINT
         const val S3_BUCKET = BuildConfig.AWS_S3_BUCKET
 
@@ -69,6 +70,7 @@ object Constants {
         const val KEYSTORE_ALIAS = "medpull_master_key"
         const val ENCRYPTED_PREFS_NAME = "medpull_secure_prefs"
         const val KEY_AUTH_TOKEN = "auth_token"
+        const val KEY_ID_TOKEN = "id_token"
         const val KEY_REFRESH_TOKEN = "refresh_token"
     }
 

@@ -50,6 +50,22 @@ class SecureStorageManager @Inject constructor(
     }
 
     /**
+     * Save ID token securely
+     */
+    fun saveIdToken(token: String) {
+        encryptedPrefs.edit()
+            .putString(Constants.Encryption.KEY_ID_TOKEN, token)
+            .apply()
+    }
+
+    /**
+     * Get ID token
+     */
+    fun getIdToken(): String? {
+        return encryptedPrefs.getString(Constants.Encryption.KEY_ID_TOKEN, null)
+    }
+
+    /**
      * Save refresh token securely
      */
     fun saveRefreshToken(token: String) {

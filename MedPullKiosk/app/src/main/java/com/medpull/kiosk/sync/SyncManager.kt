@@ -7,6 +7,7 @@ import com.medpull.kiosk.data.local.entities.SyncOperationType
 import com.medpull.kiosk.data.local.entities.SyncQueueEntity
 import com.medpull.kiosk.data.local.entities.SyncQueueStatus
 import com.medpull.kiosk.data.remote.aws.S3Service
+import com.medpull.kiosk.data.repository.AuthRepository
 import com.medpull.kiosk.utils.NetworkMonitor
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -14,14 +15,15 @@ import javax.inject.Singleton
 
 /**
  * Manages synchronization of offline operations with AWS
- * Note: Does NOT depend on repositories to avoid circular dependencies
+ * Refreshes credentials before processing queued operations
  */
 @Singleton
 class SyncManager @Inject constructor(
     private val syncQueueDao: SyncQueueDao,
     private val networkMonitor: NetworkMonitor,
     private val s3Service: S3Service,
-    private val gson: Gson
+    private val gson: Gson,
+    private val authRepository: AuthRepository
 ) {
 
     companion object {
@@ -58,6 +60,19 @@ class SyncManager @Inject constructor(
     suspend fun processPendingOperations(): Int {
         if (!networkMonitor.isCurrentlyConnected()) {
             Log.d(TAG, "Not online, skipping sync")
+            return 0
+        }
+
+        // Check authentication before processing
+        if (!authRepository.isAuthenticated()) {
+            Log.e(TAG, "User not authenticated, cannot process sync operations")
+            return 0
+        }
+
+        // Refresh tokens if needed before processing operations
+        val tokensRefreshed = authRepository.refreshTokensIfNeeded()
+        if (!tokensRefreshed) {
+            Log.e(TAG, "Failed to refresh tokens before sync, aborting")
             return 0
         }
 
