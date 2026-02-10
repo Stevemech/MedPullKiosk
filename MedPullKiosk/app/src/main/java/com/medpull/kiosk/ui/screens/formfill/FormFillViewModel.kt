@@ -1,5 +1,6 @@
 package com.medpull.kiosk.ui.screens.formfill
 
+import android.app.Application
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -7,7 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.medpull.kiosk.data.models.FormField
 import com.medpull.kiosk.data.repository.FormRepository
 import com.medpull.kiosk.data.repository.TranslationRepository
+import com.medpull.kiosk.utils.LocaleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -19,6 +23,8 @@ import javax.inject.Inject
 class FormFillViewModel @Inject constructor(
     private val formRepository: FormRepository,
     private val translationRepository: TranslationRepository,
+    private val localeManager: LocaleManager,
+    @ApplicationContext private val appContext: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -40,6 +46,10 @@ class FormFillViewModel @Inject constructor(
      */
     private fun loadForm() {
         viewModelScope.launch {
+            // Resolve user language once
+            val language = localeManager.getCurrentLanguage(appContext)
+            _state.update { it.copy(userLanguage = language) }
+
             try {
                 formRepository.getFormByIdFlow(formId)
                     .catch { e ->
@@ -55,6 +65,11 @@ class FormFillViewModel @Inject constructor(
                                     isLoading = false,
                                     completionPercentage = calculateCompletionPercentage(form.fields)
                                 )
+                            }
+
+                            // Auto-translate if non-English and fields lack translations
+                            if (language != "en" && form.fields.any { it.translatedText == null }) {
+                                translateAllFields(language)
                             }
                         } else {
                             _state.update {
@@ -74,6 +89,27 @@ class FormFillViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Translate all fields to the target language
+     */
+    private suspend fun translateAllFields(targetLanguage: String) {
+        try {
+            val currentFields = _state.value.fields
+            val translationMap = translationRepository.translateFormFields(currentFields, targetLanguage)
+
+            val updatedFields = currentFields.map { field ->
+                val translated = translationMap[field.id]
+                if (translated != null) field.copy(translatedText = translated) else field
+            }
+
+            _state.update { it.copy(fields = updatedFields) }
+            Log.d(TAG, "Auto-translated ${translationMap.size} fields to $targetLanguage")
+        } catch (e: Exception) {
+            Log.e(TAG, "Auto-translation failed", e)
+            // Non-fatal — fields still display in English
         }
     }
 
@@ -204,10 +240,19 @@ class FormFillViewModel @Inject constructor(
     }
 
     /**
-     * Set current page
+     * Set total page count (called when PDF is loaded)
+     */
+    fun setTotalPages(count: Int) {
+        _state.update { it.copy(totalPages = count.coerceAtLeast(1)) }
+    }
+
+    /**
+     * Set current page (bounds-checked against totalPages)
      */
     fun setCurrentPage(page: Int) {
-        _state.update { it.copy(currentPage = page) }
+        _state.update {
+            it.copy(currentPage = page.coerceIn(0, it.totalPages - 1))
+        }
     }
 
     /**
@@ -226,9 +271,11 @@ data class FormFillState(
     val fields: List<FormField> = emptyList(),
     val selectedField: FormField? = null,
     val currentPage: Int = 0,
+    val totalPages: Int = 1,
     val showFieldOverlays: Boolean = true,
     val completionPercentage: Float = 0f,
     val isLoading: Boolean = true,
     val error: String? = null,
-    val shouldNavigateBack: Boolean = false
+    val shouldNavigateBack: Boolean = false,
+    val userLanguage: String = "en"
 )

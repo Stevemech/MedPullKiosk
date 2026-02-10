@@ -56,7 +56,7 @@ class OpenAiService @Inject constructor(
             // Build HTTP request
             val request = Request.Builder()
                 .url(API_URL)
-                .addHeader("Authorization", "Bearer ${Constants.AI.OPENAI_API_KEY}")
+                .addHeader("Authorization", "Bearer ")
                 .addHeader("Content-Type", "application/json")
                 .post(requestBody)
                 .build()

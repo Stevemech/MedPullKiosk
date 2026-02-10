@@ -159,10 +159,7 @@ dependencies {
     // WorkManager (for background sync)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
-    // AI Client Libraries
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.aallam.openai:openai-client:3.6.2")
-    implementation(platform("com.aallam.openai:openai-client-bom:3.6.2"))
+    // AI — using AWS Bedrock (Claude) via existing Cognito credentials
 
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")

@@ -1,8 +1,7 @@
 package com.medpull.kiosk.ui.screens.formfill
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -10,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -20,13 +18,13 @@ import com.medpull.kiosk.R
 import com.medpull.kiosk.data.models.FieldType
 import com.medpull.kiosk.data.models.FormField
 import com.medpull.kiosk.ui.components.ActivityTracker
-import com.medpull.kiosk.ui.components.SimplePdfViewer
+import com.medpull.kiosk.ui.components.InteractivePdfViewer
 import com.medpull.kiosk.ui.screens.ai.AiChatDialog
 import com.medpull.kiosk.utils.SessionManager
 import java.io.File
 
 /**
- * Form fill screen with PDF viewer and field overlays
+ * Form fill screen — full-screen interactive PDF viewer with translation overlays.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,12 +34,15 @@ fun FormFillScreen(
     onExport: (String) -> Unit = {},
     viewModel: FormFillViewModel = hiltViewModel()
 ) {
-    // Track activity for session management
     ActivityTracker(sessionManager = sessionManager)
 
     val state by viewModel.state.collectAsState()
-    val context = LocalContext.current
     var showAiChat by remember { mutableStateOf(false) }
+
+    // Zoom/pan state — owned here so both gestures and buttons can modify it
+    var userScale by remember(state.currentPage) { mutableFloatStateOf(1f) }
+    var userOffsetX by remember(state.currentPage) { mutableFloatStateOf(0f) }
+    var userOffsetY by remember(state.currentPage) { mutableFloatStateOf(0f) }
 
     // Handle navigation back
     LaunchedEffect(state.shouldNavigateBack) {
@@ -75,7 +76,6 @@ fun FormFillScreen(
                     }
                 },
                 actions = {
-                    // Toggle field overlays
                     IconButton(onClick = { viewModel.toggleFieldOverlays() }) {
                         Icon(
                             imageVector = if (state.showFieldOverlays) {
@@ -86,8 +86,6 @@ fun FormFillScreen(
                             contentDescription = "Toggle overlays"
                         )
                     }
-
-                    // Export button (if form is complete)
                     if (state.completionPercentage >= 100f) {
                         IconButton(onClick = { state.form?.let { onExport(it.id) } }) {
                             Icon(Icons.Default.FileDownload, contentDescription = "Export")
@@ -127,13 +125,70 @@ fun FormFillScreen(
                     ErrorState(message = state.error ?: "Form not found")
                 }
                 else -> {
-                    FormContent(
+                    // Full-screen interactive PDF viewer
+                    InteractivePdfViewer(
                         pdfFile = File(state.form!!.originalFileUri),
-                        fields = state.fields,
                         currentPage = state.currentPage,
-                        showFieldOverlays = state.showFieldOverlays,
-                        onFieldClick = { viewModel.selectField(it) }
+                        fields = state.fields,
+                        showOverlays = state.showFieldOverlays,
+                        userScale = userScale,
+                        userOffsetX = userOffsetX,
+                        userOffsetY = userOffsetY,
+                        onTransformChanged = { scale, offsetX, offsetY ->
+                            userScale = scale
+                            userOffsetX = offsetX
+                            userOffsetY = offsetY
+                        },
+                        onFieldClick = { field ->
+                            // Only open dialog for non-checkbox fields
+                            if (field.fieldType != FieldType.CHECKBOX) {
+                                viewModel.selectField(field)
+                            }
+                        },
+                        onCheckboxToggle = { field ->
+                            val current = field.value
+                            val newValue = if (current == "true" || current == "checked") "" else "true"
+                            viewModel.updateFieldValue(field.id, newValue)
+                        },
+                        onPageCountLoaded = { count ->
+                            viewModel.setTotalPages(count)
+                        },
+                        modifier = Modifier.fillMaxSize()
                     )
+
+                    // Zoom +/- buttons (bottom-end)
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SmallFloatingActionButton(
+                            onClick = { userScale = (userScale * 1.5f).coerceAtMost(5f) },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Zoom in")
+                        }
+                        SmallFloatingActionButton(
+                            onClick = { userScale = (userScale / 1.5f).coerceAtLeast(0.5f) },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "Zoom out")
+                        }
+                    }
+
+                    // Page navigation controls (only for multi-page PDFs)
+                    if (state.totalPages > 1) {
+                        PageNavigationBar(
+                            currentPage = state.currentPage,
+                            totalPages = state.totalPages,
+                            onPreviousPage = { viewModel.setCurrentPage(state.currentPage - 1) },
+                            onNextPage = { viewModel.setCurrentPage(state.currentPage + 1) },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 16.dp)
+                        )
+                    }
                 }
             }
 
@@ -168,24 +223,68 @@ fun FormFillScreen(
         }
     }
 
-    // Field input dialog
+    // Field input dialog (non-checkbox fields only)
     state.selectedField?.let { field ->
-        FieldInputDialog(
-            field = field,
-            onDismiss = { viewModel.clearFieldSelection() },
-            onSave = { value ->
-                viewModel.updateFieldValue(field.id, value)
-            }
-        )
+        if (field.fieldType != FieldType.CHECKBOX) {
+            FieldInputDialog(
+                field = field,
+                onDismiss = { viewModel.clearFieldSelection() },
+                onSave = { value ->
+                    viewModel.updateFieldValue(field.id, value)
+                }
+            )
+        }
     }
 
     // AI Chat Dialog
     if (showAiChat) {
         AiChatDialog(
             onDismiss = { showAiChat = false },
-            language = "en", // TODO: Get from user preferences
-            formContext = state.form?.fileName
+            language = state.userLanguage,
+            formContext = state.form?.fileName,
+            formFields = state.fields
         )
+    }
+}
+
+@Composable
+private fun PageNavigationBar(
+    currentPage: Int,
+    totalPages: Int,
+    onPreviousPage: () -> Unit,
+    onNextPage: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        tonalElevation = 4.dp,
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            IconButton(
+                onClick = onPreviousPage,
+                enabled = currentPage > 0
+            ) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Previous page")
+            }
+
+            Text(
+                text = "Page ${currentPage + 1} of $totalPages",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            IconButton(
+                onClick = onNextPage,
+                enabled = currentPage < totalPages - 1
+            ) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Next page")
+            }
+        }
     }
 }
 
@@ -229,161 +328,6 @@ private fun ErrorState(message: String) {
                 text = message,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.error
-            )
-        }
-    }
-}
-
-@Composable
-private fun FormContent(
-    pdfFile: File,
-    fields: List<FormField>,
-    currentPage: Int,
-    showFieldOverlays: Boolean,
-    onFieldClick: (FormField) -> Unit
-) {
-    Row(modifier = Modifier.fillMaxSize()) {
-        // PDF Viewer (70% width)
-        Box(
-            modifier = Modifier
-                .weight(0.7f)
-                .fillMaxHeight()
-                .padding(8.dp)
-        ) {
-            SimplePdfViewer(
-                pdfFile = pdfFile,
-                page = currentPage,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Field overlays (disabled for now due to coordinate mapping complexity)
-            // Will be enhanced in future iteration
-        }
-
-        // Fields List (30% width)
-        Card(
-            modifier = Modifier
-                .weight(0.3f)
-                .fillMaxHeight()
-                .padding(8.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.form_fields_label),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Divider()
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (fields.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No fields detected",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                } else {
-                    FieldsList(
-                        fields = fields,
-                        onFieldClick = onFieldClick
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FieldsList(
-    fields: List<FormField>,
-    onFieldClick: (FormField) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(fields, key = { it.id }) { field ->
-            FieldCard(
-                field = field,
-                onClick = { onFieldClick(field) }
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FieldCard(
-    field: FormField,
-    onClick: () -> Unit
-) {
-    val isFilled = !field.value.isNullOrBlank()
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isFilled) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            } else {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-            }
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Status indicator
-            Icon(
-                imageVector = if (isFilled) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
-                tint = if (isFilled) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
-                modifier = Modifier.size(24.dp)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Field info
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = field.translatedText ?: field.fieldName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2
-                )
-                if (field.value != null) {
-                    Text(
-                        text = field.value!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 1
-                    )
-                }
-            }
-
-            // Edit icon
-            Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = "Edit",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
             )
         }
     }

@@ -5,17 +5,18 @@ import com.medpull.kiosk.data.local.dao.AuditLogDao
 import com.medpull.kiosk.data.local.entities.AuditLogEntity
 import com.medpull.kiosk.data.models.FormField
 import com.medpull.kiosk.data.remote.ai.AiResponse
-import com.medpull.kiosk.data.remote.ai.OpenAiService
+import com.medpull.kiosk.data.remote.ai.BedrockService
 import com.medpull.kiosk.utils.Constants
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository for AI assistance operations
+ * Repository for AI assistance operations.
+ * Uses AWS Bedrock (Claude) via existing Cognito credentials.
  */
 @Singleton
 class AiRepository @Inject constructor(
-    private val openAiService: OpenAiService,
+    private val bedrockService: BedrockService,
     private val auditLogDao: AuditLogDao,
     private val authRepository: AuthRepository
 ) {
@@ -33,16 +34,9 @@ class AiRepository @Inject constructor(
         formContext: String? = null
     ): AiChatResult {
         return try {
-            // Check if API key is configured
-            if (Constants.AI.OPENAI_API_KEY.isBlank()) {
-                return AiChatResult.Error("AI service not configured. Please add OpenAI API key.")
-            }
-
-            // Log audit event
             logAiQuery(message)
 
-            // Send to AI service
-            when (val response = openAiService.sendMessage(message, formContext, language)) {
+            when (val response = bedrockService.sendMessage(message, formContext, language)) {
                 is AiResponse.Success -> {
                     Log.d(TAG, "AI response received")
                     AiChatResult.Success(response.message)
@@ -66,13 +60,9 @@ class AiRepository @Inject constructor(
         language: String
     ): AiChatResult {
         return try {
-            if (Constants.AI.OPENAI_API_KEY.isBlank()) {
-                return AiChatResult.Error("AI service not configured")
-            }
-
             logAiQuery("Field suggestion: ${field.fieldName}")
 
-            when (val response = openAiService.suggestFieldValue(
+            when (val response = bedrockService.suggestFieldValue(
                 fieldName = field.translatedText ?: field.fieldName,
                 fieldType = field.fieldType.name,
                 language = language
@@ -94,13 +84,9 @@ class AiRepository @Inject constructor(
         language: String
     ): AiChatResult {
         return try {
-            if (Constants.AI.OPENAI_API_KEY.isBlank()) {
-                return AiChatResult.Error("AI service not configured")
-            }
-
             logAiQuery("Explain term: $term")
 
-            when (val response = openAiService.explainMedicalTerm(term, language)) {
+            when (val response = bedrockService.explainMedicalTerm(term, language)) {
                 is AiResponse.Success -> AiChatResult.Success(response.message)
                 is AiResponse.Error -> AiChatResult.Error(response.message)
             }

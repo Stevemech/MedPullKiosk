@@ -102,10 +102,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOpenAiService(
+    fun provideBedrockService(
+        credentialsProvider: com.amazonaws.auth.CognitoCachingCredentialsProvider,
         okHttpClient: OkHttpClient,
         gson: Gson
-    ): com.medpull.kiosk.data.remote.ai.OpenAiService {
-        return com.medpull.kiosk.data.remote.ai.OpenAiService(okHttpClient, gson)
+    ): com.medpull.kiosk.data.remote.ai.BedrockService {
+        return com.medpull.kiosk.data.remote.ai.BedrockService(credentialsProvider, okHttpClient, gson)
     }
 }

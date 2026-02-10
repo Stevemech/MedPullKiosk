@@ -45,6 +45,7 @@ data class FormField(
     val translatedText: String? = null,
     val value: String? = null,
     val boundingBox: BoundingBox? = null,
+    val labelBoundingBox: BoundingBox? = null,
     val confidence: Float = 0f,
     val required: Boolean = false,
     val page: Int = 1

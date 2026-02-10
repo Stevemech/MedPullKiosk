@@ -37,6 +37,11 @@ data class FormFieldEntity(
     val boundingBoxWidth: Float? = null,
     val boundingBoxHeight: Float? = null,
     val boundingBoxPage: Int? = null,
+    val labelBBLeft: Float? = null,
+    val labelBBTop: Float? = null,
+    val labelBBWidth: Float? = null,
+    val labelBBHeight: Float? = null,
+    val labelBBPage: Int? = null,
     val confidence: Float = 0f,
     val required: Boolean = false,
     val page: Int = 1
@@ -53,6 +58,17 @@ data class FormFieldEntity(
             )
         } else null
 
+        val labelBoundingBox = if (labelBBLeft != null && labelBBTop != null &&
+            labelBBWidth != null && labelBBHeight != null) {
+            BoundingBox(
+                left = labelBBLeft,
+                top = labelBBTop,
+                width = labelBBWidth,
+                height = labelBBHeight,
+                page = labelBBPage ?: 1
+            )
+        } else null
+
         return FormField(
             id = id,
             formId = formId,
@@ -62,6 +78,7 @@ data class FormFieldEntity(
             translatedText = translatedText,
             value = value,
             boundingBox = boundingBox,
+            labelBoundingBox = labelBoundingBox,
             confidence = confidence,
             required = required,
             page = page
@@ -82,6 +99,11 @@ data class FormFieldEntity(
             boundingBoxWidth = field.boundingBox?.width,
             boundingBoxHeight = field.boundingBox?.height,
             boundingBoxPage = field.boundingBox?.page,
+            labelBBLeft = field.labelBoundingBox?.left,
+            labelBBTop = field.labelBoundingBox?.top,
+            labelBBWidth = field.labelBoundingBox?.width,
+            labelBBHeight = field.labelBoundingBox?.height,
+            labelBBPage = field.labelBoundingBox?.page,
             confidence = field.confidence,
             required = field.required,
             page = field.page

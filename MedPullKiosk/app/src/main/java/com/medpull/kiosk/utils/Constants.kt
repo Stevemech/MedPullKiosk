@@ -90,19 +90,10 @@ object Constants {
         const val RETRY_DELAY_MS = 1000L
     }
 
-    // AI Assistance
+    // AI Assistance — uses AWS Bedrock (Claude) via Cognito credentials
     object AI {
-        // Note: In production, this should be stored securely or fetched from backend
-        const val OPENAI_API_KEY = "" // User needs to add their own API key
-        const val OPENAI_MODEL = "gpt-3.5-turbo"
-        const val CLAUDE_MODEL = "claude-3-sonnet-20240229"
-        const val MAX_TOKENS = 500
-        const val TEMPERATURE = 0.7f
-        const val SYSTEM_PROMPT_TEMPLATE = """
-            You are a helpful medical form assistant. The user is filling out a medical form in %s.
-            Please provide assistance in %s. Be concise, accurate, and respectful of medical privacy.
-            Do not provide medical advice - only help with form filling questions.
-        """
+        const val BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+        const val MAX_TOKENS = 512
     }
 
     // Audit Logging

@@ -20,6 +20,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medpull.kiosk.R
 import kotlinx.coroutines.launch
+import com.medpull.kiosk.data.models.FormField
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -32,6 +33,7 @@ fun AiChatDialog(
     onDismiss: () -> Unit,
     language: String = "en",
     formContext: String? = null,
+    formFields: List<FormField> = emptyList(),
     viewModel: AiAssistanceViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -39,10 +41,13 @@ fun AiChatDialog(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Set language and context when dialog opens
+    // Set language, context, and fields when dialog opens
     LaunchedEffect(language, formContext) {
         viewModel.setLanguage(language)
         formContext?.let { viewModel.setFormContext(it) }
+        if (formFields.isNotEmpty()) {
+            viewModel.setFormFields(formFields)
+        }
     }
 
     // Auto-scroll to bottom when new messages arrive

@@ -53,11 +53,17 @@ class AiAssistanceViewModel @Inject constructor(
 
                 Log.d(TAG, "Sending message to AI: $message")
 
+                // Build context from form name + fields summary
+                val fullContext = buildString {
+                    _state.value.formContext?.let { append("Form: $it\n") }
+                    _state.value.formFieldsSummary?.let { append("Fields:\n$it") }
+                }.takeIf { it.isNotBlank() }
+
                 // Get AI response
                 when (val result = aiRepository.sendChatMessage(
                     message = message,
                     language = _state.value.language,
-                    formContext = _state.value.formContext
+                    formContext = fullContext
                 )) {
                     is AiChatResult.Success -> {
                         Log.d(TAG, "AI response received: ${result.message}")
@@ -229,10 +235,22 @@ class AiAssistanceViewModel @Inject constructor(
     }
 
     /**
-     * Set form context
+     * Set form context — includes form name and a summary of fields
      */
     fun setFormContext(context: String) {
         _state.update { it.copy(formContext = context) }
+    }
+
+    /**
+     * Set form fields context so the AI knows what fields are on the form
+     */
+    fun setFormFields(fields: List<FormField>) {
+        if (fields.isEmpty()) return
+        val summary = fields.joinToString("\n") { field ->
+            val status = if (!field.value.isNullOrBlank()) "filled: ${field.value}" else "empty"
+            "- ${field.fieldName} (${field.fieldType.name}): $status"
+        }
+        _state.update { it.copy(formFieldsSummary = summary) }
     }
 
     /**
@@ -258,7 +276,8 @@ data class AiAssistanceState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val language: String = "en",
-    val formContext: String? = null
+    val formContext: String? = null,
+    val formFieldsSummary: String? = null
 )
 
 /**
