@@ -70,9 +70,9 @@ class SyncManager @Inject constructor(
         }
 
         // Refresh tokens if needed before processing operations
-        val tokensRefreshed = authRepository.refreshTokensIfNeeded()
-        if (!tokensRefreshed) {
-            Log.e(TAG, "Failed to refresh tokens before sync, aborting")
+        val credentialError = authRepository.refreshTokensIfNeeded()
+        if (credentialError != null) {
+            Log.e(TAG, "Failed to refresh tokens before sync: $credentialError")
             return 0
         }
 

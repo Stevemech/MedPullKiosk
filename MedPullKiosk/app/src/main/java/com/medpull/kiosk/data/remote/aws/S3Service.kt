@@ -40,20 +40,26 @@ class S3Service @Inject constructor(
     private fun handleAwsException(e: Exception, operation: String): String {
         return when (e) {
             is AmazonServiceException -> {
-                when (e.statusCode) {
-                    401, 403 -> {
+                val msg = e.errorMessage ?: ""
+                when {
+                    msg.contains("login token", ignoreCase = true) ||
+                    msg.contains("Token expired", ignoreCase = true) -> {
+                        Log.e(TAG, "$operation: Invalid login token - credential refresh needed", e)
+                        "Session credentials expired. Please sign out and sign back in."
+                    }
+                    e.statusCode == 401 || e.statusCode == 403 -> {
                         Log.e(TAG, "$operation: Access denied - credentials may be invalid or expired", e)
                         "Access denied. Please try logging in again."
                     }
-                    404 -> {
+                    e.statusCode == 404 -> {
                         Log.e(TAG, "$operation: Resource not found", e)
                         "File not found."
                     }
-                    429, 503 -> {
+                    e.statusCode == 429 || e.statusCode == 503 -> {
                         Log.e(TAG, "$operation: Service throttled or unavailable", e)
                         "Service temporarily unavailable. Please try again."
                     }
-                    500, 502, 504 -> {
+                    e.statusCode in listOf(500, 502, 504) -> {
                         Log.e(TAG, "$operation: Server error", e)
                         "Server error. Please try again later."
                     }

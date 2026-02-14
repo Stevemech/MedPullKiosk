@@ -192,6 +192,29 @@ fun FormSelectionScreen(
             }
         )
     }
+
+    // Session expired dialog
+    if (state.sessionExpired) {
+        AlertDialog(
+            onDismissRequest = { /* non-dismissable */ },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.LockClock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("Session Expired") },
+            text = {
+                Text(state.sessionExpiredMessage ?: "Your session has expired. Please sign out and sign back in to continue.")
+            },
+            confirmButton = {
+                Button(onClick = onLogout) {
+                    Text("Sign Out")
+                }
+            }
+        )
+    }
 }
 
 @Composable

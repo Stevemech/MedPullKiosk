@@ -6,14 +6,21 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.medpull.kiosk.data.models.FormField
+import com.medpull.kiosk.data.repository.AuthRepository
 import com.medpull.kiosk.data.repository.FormRepository
+import com.medpull.kiosk.data.repository.StorageRepository
 import com.medpull.kiosk.data.repository.TranslationRepository
 import com.medpull.kiosk.utils.LocaleManager
+import com.medpull.kiosk.utils.PdfUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
+import android.os.Environment
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -23,7 +30,10 @@ import javax.inject.Inject
 class FormFillViewModel @Inject constructor(
     private val formRepository: FormRepository,
     private val translationRepository: TranslationRepository,
+    private val storageRepository: StorageRepository,
+    private val authRepository: AuthRepository,
     private val localeManager: LocaleManager,
+    private val pdfUtils: PdfUtils,
     @ApplicationContext private val appContext: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -226,6 +236,157 @@ class FormFillViewModel @Inject constructor(
     }
 
     /**
+     * Generate a new filled PDF with field values translated to English
+     */
+    fun generateNewForm() {
+        viewModelScope.launch {
+            _state.update { it.copy(isGeneratingForm = true, generatedFormPath = null, generatedFormError = null) }
+
+            try {
+                val currentForm = _state.value.form
+                    ?: throw IllegalStateException("No form loaded")
+                val currentFields = _state.value.fields
+
+                // Collect filled field values (skip blank ones)
+                val filledValues = currentFields
+                    .filter { !it.value.isNullOrBlank() }
+                    .associate { it.id to it.value!! }
+
+                if (filledValues.isEmpty()) {
+                    _state.update { it.copy(
+                        isGeneratingForm = false,
+                        generatedFormError = "No fields have been filled in yet"
+                    ) }
+                    return@launch
+                }
+
+                // Translate to English if user language is not English
+                val englishValues = if (_state.value.userLanguage != "en") {
+                    translationRepository.translateValuesToEnglishAutoDetect(filledValues)
+                } else {
+                    filledValues
+                }
+
+                // Build fields with translated English values for PDF generation
+                val fieldsForPdf = currentFields.map { field ->
+                    val englishValue = englishValues[field.id]
+                    if (englishValue != null) field.copy(value = englishValue) else field
+                }
+
+                // Generate filled PDF on IO dispatcher
+                val outputDir = File(appContext.filesDir, "generated_forms").also { it.mkdirs() }
+                val outputFile = withContext(Dispatchers.IO) {
+                    pdfUtils.generateFilledPdf(
+                        originalPdfPath = currentForm.originalFileUri,
+                        fields = fieldsForPdf,
+                        outputDir = outputDir
+                    )
+                }
+
+                if (outputFile != null) {
+                    _state.update { it.copy(
+                        isGeneratingForm = false,
+                        generatedFormPath = outputFile.absolutePath
+                    ) }
+                    Log.d(TAG, "Generated form at: ${outputFile.absolutePath}")
+                } else {
+                    _state.update { it.copy(
+                        isGeneratingForm = false,
+                        generatedFormError = "Failed to generate PDF"
+                    ) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating new form", e)
+                _state.update { it.copy(
+                    isGeneratingForm = false,
+                    generatedFormError = "Error: ${e.message}"
+                ) }
+            }
+        }
+    }
+
+    /**
+     * Reset generated form dialog state
+     */
+    fun clearGeneratedFormState() {
+        _state.update { it.copy(
+            generatedFormPath = null,
+            generatedFormError = null,
+            generatedFormExportSuccess = null
+        ) }
+    }
+
+    /**
+     * Export the generated PDF to S3 via StorageRepository
+     */
+    fun exportGeneratedFormToS3() {
+        val path = _state.value.generatedFormPath ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(isExportingGeneratedForm = true, generatedFormExportSuccess = null) }
+            try {
+                val userId = authRepository.getCurrentUserId()
+                    ?: throw IllegalStateException("No user logged in")
+                val file = File(path)
+                val result = storageRepository.uploadFilledForm(file, userId, formId)
+                result.fold(
+                    onSuccess = { message ->
+                        _state.update { it.copy(
+                            isExportingGeneratedForm = false,
+                            generatedFormExportSuccess = message
+                        ) }
+                        Log.d(TAG, "Generated form uploaded to S3: $message")
+                    },
+                    onFailure = { e ->
+                        _state.update { it.copy(
+                            isExportingGeneratedForm = false,
+                            generatedFormError = "Upload failed: ${e.message}"
+                        ) }
+                        Log.e(TAG, "Failed to upload generated form", e)
+                    }
+                )
+            } catch (e: Exception) {
+                _state.update { it.copy(
+                    isExportingGeneratedForm = false,
+                    generatedFormError = "Upload failed: ${e.message}"
+                ) }
+                Log.e(TAG, "Failed to upload generated form", e)
+            }
+        }
+    }
+
+    /**
+     * Save the generated PDF to the device's Documents folder
+     */
+    fun exportGeneratedFormToLocal() {
+        val path = _state.value.generatedFormPath ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(isExportingGeneratedForm = true, generatedFormExportSuccess = null) }
+            try {
+                val sourceFile = File(path)
+                val docsDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOCUMENTS
+                )
+                val destFile = File(docsDir, sourceFile.name)
+                withContext(Dispatchers.IO) {
+                    docsDir.mkdirs()
+                    sourceFile.copyTo(destFile, overwrite = true)
+                }
+                _state.update { it.copy(
+                    isExportingGeneratedForm = false,
+                    generatedFormExportSuccess = "Saved to ${destFile.absolutePath}"
+                ) }
+                Log.d(TAG, "Generated form saved locally: ${destFile.absolutePath}")
+            } catch (e: Exception) {
+                _state.update { it.copy(
+                    isExportingGeneratedForm = false,
+                    generatedFormError = "Save failed: ${e.message}"
+                ) }
+                Log.e(TAG, "Failed to save generated form locally", e)
+            }
+        }
+    }
+
+    /**
      * Clear error
      */
     fun clearError() {
@@ -277,5 +438,10 @@ data class FormFillState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val shouldNavigateBack: Boolean = false,
-    val userLanguage: String = "en"
+    val userLanguage: String = "en",
+    val isGeneratingForm: Boolean = false,
+    val generatedFormPath: String? = null,
+    val generatedFormError: String? = null,
+    val isExportingGeneratedForm: Boolean = false,
+    val generatedFormExportSuccess: String? = null
 )

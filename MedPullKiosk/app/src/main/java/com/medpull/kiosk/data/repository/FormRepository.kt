@@ -157,12 +157,12 @@ class FormRepository @Inject constructor(
             )
         }
 
-        // Refresh tokens if needed before AWS operations
-        val tokensValid = authRepository.refreshTokensIfNeeded()
-        if (!tokensValid) {
-            Log.e(TAG, "Failed to refresh tokens for upload")
+        // Refresh tokens and ensure credentials provider has valid STS creds
+        val credentialError = authRepository.refreshTokensIfNeeded()
+        if (credentialError != null) {
+            Log.e(TAG, "Failed to refresh tokens for upload: $credentialError")
             updateFormStatus(formId, FormStatus.ERROR)
-            return FormProcessResult.Error("Session expired. Please log in again")
+            return FormProcessResult.Error(credentialError)
         }
 
         // Upload to S3

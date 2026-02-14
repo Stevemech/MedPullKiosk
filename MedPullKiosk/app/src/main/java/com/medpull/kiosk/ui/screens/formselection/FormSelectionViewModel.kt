@@ -139,10 +139,15 @@ class FormSelectionViewModel @Inject constructor(
                     }
                     is FormProcessResult.Error -> {
                         Log.e(TAG, "Form processing error: ${result.message}")
+                        val isSessionError = result.message.contains("sign out", ignoreCase = true) ||
+                            result.message.contains("session expired", ignoreCase = true) ||
+                            result.message.contains("credential error", ignoreCase = true)
                         _state.update {
                             it.copy(
                                 isUploading = false,
-                                error = "Failed to process form: ${result.message}"
+                                error = if (!isSessionError) "Failed to process form: ${result.message}" else null,
+                                sessionExpired = isSessionError,
+                                sessionExpiredMessage = if (isSessionError) result.message else null
                             )
                         }
                     }
@@ -215,5 +220,7 @@ data class FormSelectionState(
     val isUploading: Boolean = false,
     val uploadProgress: Float = 0f,
     val error: String? = null,
-    val successMessage: String? = null
+    val successMessage: String? = null,
+    val sessionExpired: Boolean = false,
+    val sessionExpiredMessage: String? = null
 )

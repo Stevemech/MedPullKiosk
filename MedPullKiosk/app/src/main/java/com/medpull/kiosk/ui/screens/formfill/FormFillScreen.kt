@@ -1,18 +1,29 @@
 package com.medpull.kiosk.ui.screens.formfill
 
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medpull.kiosk.R
 import com.medpull.kiosk.data.models.FieldType
@@ -160,7 +171,7 @@ fun FormFillScreen(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = 80.dp),
+                            .padding(end = 16.dp, bottom = 130.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SmallFloatingActionButton(
@@ -186,8 +197,33 @@ fun FormFillScreen(
                             onNextPage = { viewModel.setCurrentPage(state.currentPage + 1) },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 16.dp)
+                                .padding(bottom = 68.dp)
                         )
+                    }
+
+                    // Prominent "Create New Form" button at the bottom
+                    if (state.fields.any { !it.value.isNullOrBlank() }) {
+                        Button(
+                            onClick = { viewModel.generateNewForm() },
+                            enabled = !state.isGeneratingForm,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(vertical = 14.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PostAdd,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Create New Form",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
                     }
                 }
             }
@@ -243,6 +279,20 @@ fun FormFillScreen(
             language = state.userLanguage,
             formContext = state.form?.fileName,
             formFields = state.fields
+        )
+    }
+
+    // Generate Form result dialog — with PDF preview + export options
+    if (state.isGeneratingForm || state.generatedFormPath != null || state.generatedFormError != null) {
+        GenerateFormDialog(
+            isGenerating = state.isGeneratingForm,
+            generatedPath = state.generatedFormPath,
+            error = state.generatedFormError,
+            isExporting = state.isExportingGeneratedForm,
+            exportSuccess = state.generatedFormExportSuccess,
+            onExportToCloud = { viewModel.exportGeneratedFormToS3() },
+            onExportToLocal = { viewModel.exportGeneratedFormToLocal() },
+            onDismiss = { viewModel.clearGeneratedFormState() }
         )
     }
 }
@@ -399,6 +449,272 @@ private fun FieldInputDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GenerateFormDialog(
+    isGenerating: Boolean,
+    generatedPath: String?,
+    error: String?,
+    isExporting: Boolean,
+    exportSuccess: String?,
+    onExportToCloud: () -> Unit,
+    onExportToLocal: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = { if (!isGenerating && !isExporting) onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(vertical = 24.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                when {
+                    // Loading state
+                    isGenerating -> {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Generating form...",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    // Error state
+                    error != null && generatedPath == null -> {
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(onClick = onDismiss) {
+                            Text(stringResource(R.string.ok))
+                        }
+                    }
+
+                    // Success state — PDF preview + export options
+                    generatedPath != null -> {
+                        // Title
+                        Text(
+                            text = "Form Generated",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // PDF preview
+                        PdfPreviewImage(
+                            pdfFile = File(generatedPath),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 320.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Export success banner
+                        if (exportSuccess != null) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = exportSuccess,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // Export error banner
+                        if (error != null) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Error,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = error,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // Export options
+                        if (isExporting) {
+                            CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Exporting...",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        } else {
+                            // Cloud upload card
+                            ExportOptionCard(
+                                icon = Icons.Default.CloudUpload,
+                                title = "Export to Cloud",
+                                description = "Upload to your secure cloud storage",
+                                onClick = onExportToCloud,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            // Local save card
+                            ExportOptionCard(
+                                icon = Icons.Default.SaveAlt,
+                                title = "Save to Device",
+                                description = "Save a copy to your Documents folder",
+                                onClick = onExportToLocal,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Dismiss button
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isExporting
+                        ) {
+                            Text("Done")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExportOptionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PdfPreviewImage(pdfFile: File, modifier: Modifier = Modifier) {
+    val bitmap = remember(pdfFile.absolutePath) {
+        try {
+            val fd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            val renderer = PdfRenderer(fd)
+            val page = renderer.openPage(0)
+            val bmp = Bitmap.createBitmap(page.width * 2, page.height * 2, Bitmap.Config.ARGB_8888)
+            bmp.eraseColor(android.graphics.Color.WHITE)
+            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            page.close()
+            renderer.close()
+            fd.close()
+            bmp
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "PDF preview",
+            modifier = modifier,
+            contentScale = ContentScale.Fit
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .heightIn(min = 120.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Preview unavailable",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
         }
     }
 }

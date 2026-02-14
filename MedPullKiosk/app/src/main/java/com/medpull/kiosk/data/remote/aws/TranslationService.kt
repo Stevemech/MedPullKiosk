@@ -74,6 +74,54 @@ class TranslationService @Inject constructor(
     }
 
     /**
+     * Translate text to English with automatic source language detection.
+     * AWS Translate supports "auto" as source language code.
+     */
+    suspend fun translateToEnglishAutoDetect(
+        text: String
+    ): TranslationResult = withContext(Dispatchers.IO) {
+        try {
+            if (text.isBlank()) {
+                return@withContext TranslationResult.Success(text)
+            }
+
+            val request = TranslateTextRequest()
+                .withText(text)
+                .withSourceLanguageCode("auto")
+                .withTargetLanguageCode("en")
+
+            val result = translateClient.translateText(request)
+
+            TranslationResult.Success(result.translatedText)
+        } catch (e: Exception) {
+            TranslationResult.Error(e.message ?: "Translation failed")
+        }
+    }
+
+    /**
+     * Translate field values to English with automatic source language detection.
+     */
+    suspend fun translateFieldValuesToEnglishAutoDetect(
+        values: Map<String, String>
+    ): Map<String, String> = withContext(Dispatchers.IO) {
+        val translatedValues = mutableMapOf<String, String>()
+
+        values.forEach { (fieldId, userInput) ->
+            when (val result = translateToEnglishAutoDetect(userInput)) {
+                is TranslationResult.Success -> {
+                    translatedValues[fieldId] = result.translatedText
+                }
+                is TranslationResult.Error -> {
+                    // Keep original value if translation fails
+                    translatedValues[fieldId] = userInput
+                }
+            }
+        }
+
+        translatedValues
+    }
+
+    /**
      * Translate batch of texts
      */
     suspend fun translateBatch(

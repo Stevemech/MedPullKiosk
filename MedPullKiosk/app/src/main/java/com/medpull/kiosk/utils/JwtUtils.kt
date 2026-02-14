@@ -42,8 +42,9 @@ object JwtUtils {
      */
     fun getExpirationTime(token: String): Long? {
         val claims = decodeJwt(token) ?: return null
-        val exp = claims["exp"] as? Int ?: return null
-        return exp.toLong() * 1000 // Convert to milliseconds
+        // JSONObject may return Integer or Long depending on the value
+        val exp = (claims["exp"] as? Number)?.toLong() ?: return null
+        return exp * 1000 // Convert to milliseconds
     }
 
     /**

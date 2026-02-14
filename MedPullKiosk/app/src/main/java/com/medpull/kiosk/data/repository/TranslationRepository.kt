@@ -70,6 +70,15 @@ class TranslationRepository @Inject constructor(
     }
 
     /**
+     * Translate user input to English with automatic language detection
+     */
+    suspend fun translateValuesToEnglishAutoDetect(
+        fieldValues: Map<String, String>
+    ): Map<String, String> {
+        return translationService.translateFieldValuesToEnglishAutoDetect(fieldValues)
+    }
+
+    /**
      * Check if translation is needed
      */
     fun isTranslationNeeded(targetLanguage: String): Boolean {

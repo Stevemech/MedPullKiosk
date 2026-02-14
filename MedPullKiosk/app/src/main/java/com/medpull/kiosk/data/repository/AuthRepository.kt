@@ -113,29 +113,23 @@ class AuthRepository @Inject constructor(
         val loginKey = "cognito-idp.${Constants.AWS.REGION}.amazonaws.com/${Constants.AWS.USER_POOL_ID}"
         Log.d(TAG, "Linking Identity Pool with login key: $loginKey")
 
-        // 1. Overwrite the cached logins in SharedPreferences with an empty map.
-        //    setLogins() calls saveLogins() which writes count=0 to SharedPreferences,
-        //    ensuring the old token is no longer persisted.
-        credentialsProvider.logins = java.util.HashMap<String, String>()
-
-        // 2. Wipe cached identity ID + STS credentials (SharedPreferences + memory).
-        credentialsProvider.clear()
-        credentialsProvider.clearCredentials()
-
-        // 3. Set the fresh logins map with the new ID token.
-        credentialsProvider.logins = java.util.HashMap<String, String>().apply {
-            put(loginKey, idToken)
-        }
-
-        // 4. Eagerly refresh on IO so credentials are ready before the first AWS call.
-        //    Non-fatal: AWS service clients retry lazily on their own threads.
-        try {
-            withContext(Dispatchers.IO) {
-                credentialsProvider.refresh()
+        // SDK's setLogins() already:
+        //   1. Updates the in-memory loginsMap
+        //   2. Sets needIdentityRefresh = true (forces new GetId on next refresh)
+        //   3. Calls clearCredentials() (wipes cached STS)
+        //
+        // We intentionally do NOT call clear() — it wipes awsKeyValueStore
+        // which can race with the setLogins save and cause stale reads.
+        //
+        // All operations run on the same IO thread to avoid the non-volatile
+        // loginsMap visibility bug in the AWS SDK.
+        withContext(Dispatchers.IO) {
+            credentialsProvider.logins = java.util.HashMap<String, String>().apply {
+                put(loginKey, idToken)
             }
+
+            credentialsProvider.refresh()
             Log.d(TAG, "Identity Pool credentials refreshed successfully")
-        } catch (e: Exception) {
-            Log.w(TAG, "Eager credential refresh failed (will retry lazily): ${e.message}")
         }
     }
 
@@ -157,70 +151,73 @@ class AuthRepository @Inject constructor(
     }
 
     /**
-     * Refresh tokens and update credentials provider.
-     * Should be called before AWS operations if tokens are expiring.
+     * Refresh tokens if needed and ensure the credentials provider is fully
+     * linked with valid STS credentials before any AWS operation.
+     *
+     * Returns null on success, or an error message string on failure.
      */
-    suspend fun refreshTokensIfNeeded(): Boolean {
+    suspend fun refreshTokensIfNeeded(): String? {
         return try {
-            if (!needsTokenRefresh()) {
-                // Tokens appear valid — but still ensure the credentials provider
-                // has a working logins map (covers cold-start / cache-eviction cases)
-                val idToken = secureStorage.getIdToken()
-                if (idToken != null) {
-                    ensureCredentialsProviderLinked(idToken)
+            var idToken = secureStorage.getIdToken()
+
+            // If the stored token is expired or expiring soon, get a new one
+            if (idToken == null || JwtUtils.isTokenExpiringSoon(idToken, thresholdSeconds = 300)) {
+                Log.d(TAG, "ID token missing or expiring, attempting refresh")
+                idToken = refreshAndGetNewIdToken()
+                if (idToken == null) {
+                    return "Session expired. Please sign out and sign back in."
                 }
-                return true
             }
 
-            val email = secureStorage.getSecureString("user_email")
-            if (email == null) {
-                Log.e(TAG, "Cannot refresh tokens: no email found")
-                return false
-            }
+            // Full re-link: clears caches, sets fresh logins, and eagerly
+            // refreshes STS credentials — all on the same IO thread to
+            // avoid the non-volatile loginsMap visibility bug in the SDK.
+            // Throws if the credential exchange fails.
+            linkUserPoolToIdentityPool(idToken)
 
-            Log.d(TAG, "Refreshing tokens for: $email")
-            val session = cognitoAuthService.refreshSession(email)
-
-            if (session != null) {
-                // Save new tokens
-                val newAccessToken = session.accessToken.jwtToken
-                val newIdToken = session.idToken.jwtToken
-                val newRefreshToken = session.refreshToken.token
-
-                saveAuthTokens(newAccessToken, newIdToken, newRefreshToken)
-
-                // Update credentials provider with new ID token
-                linkUserPoolToIdentityPool(newIdToken)
-
-                Log.d(TAG, "Tokens refreshed successfully")
-                true
-            } else {
-                Log.e(TAG, "Failed to refresh tokens: session returned null")
-                false
-            }
+            Log.d(TAG, "Credentials provider linked and verified")
+            null // success
         } catch (e: Exception) {
-            Log.e(TAG, "Error refreshing tokens", e)
-            false
+            Log.e(TAG, "Error refreshing tokens / linking credentials", e)
+            "Credential error: ${e.message}"
         }
     }
 
     /**
-     * Ensure the credentials provider has valid logins and STS credentials.
-     * Called even when the ID token hasn't expired, because the cached STS
-     * credentials may have been evicted or may have expired independently.
+     * Attempt to refresh the Cognito session and return a fresh ID token.
+     * Returns null if refresh fails (e.g., refresh token expired).
      */
-    private suspend fun ensureCredentialsProviderLinked(idToken: String) {
-        try {
-            val loginKey = "cognito-idp.${Constants.AWS.REGION}.amazonaws.com/${Constants.AWS.USER_POOL_ID}"
-            val currentLogins = credentialsProvider.logins
-            val hasCorrectToken = !currentLogins.isNullOrEmpty() && currentLogins[loginKey] == idToken
-            if (!hasCorrectToken) {
-                Log.d(TAG, "Credentials provider logins missing or stale, re-linking")
-                linkUserPoolToIdentityPool(idToken)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error ensuring credentials provider linked", e)
+    private suspend fun refreshAndGetNewIdToken(): String? {
+        val email = secureStorage.getSecureString("user_email")
+        if (email == null) {
+            Log.e(TAG, "Cannot refresh tokens: no email found")
+            return null
         }
+
+        Log.d(TAG, "Refreshing session for: $email")
+        val session = cognitoAuthService.refreshSession(email)
+
+        if (session == null) {
+            Log.e(TAG, "refreshSession returned null")
+            return null
+        }
+
+        val newIdToken = session.idToken.jwtToken
+
+        // Guard against the SDK returning a cached expired session
+        if (JwtUtils.isTokenExpired(newIdToken, bufferSeconds = 0)) {
+            Log.e(TAG, "Refreshed session returned expired ID token (exp: ${JwtUtils.getExpirationTime(newIdToken)})")
+            return null
+        }
+
+        // Persist new tokens
+        saveAuthTokens(
+            session.accessToken.jwtToken,
+            newIdToken,
+            session.refreshToken.token
+        )
+        Log.d(TAG, "New tokens saved successfully")
+        return newIdToken
     }
 
     /**
@@ -240,7 +237,7 @@ class AuthRepository @Inject constructor(
             // Check if token is expired
             if (JwtUtils.isTokenExpired(idToken, bufferSeconds = 0)) {
                 Log.d(TAG, "Stored token expired, attempting refresh")
-                return refreshTokensIfNeeded()
+                return refreshTokensIfNeeded() == null
             }
 
             // Token still valid, restore credentials
@@ -295,13 +292,14 @@ class AuthRepository @Inject constructor(
                     // Save tokens to secure storage (including ID token)
                     saveAuthTokens(result.accessToken, result.idToken, result.refreshToken)
 
-                    // Link User Pool authentication to Identity Pool credentials
-                    // This allows the user to assume the authenticated IAM role for AWS services
-                    linkUserPoolToIdentityPool(result.idToken)
-
                     // Save user ID and email
                     secureStorage.saveSecureString("user_id", result.user.id)
                     secureStorage.saveSecureString("user_email", email)
+
+                    // Link User Pool authentication to Identity Pool credentials.
+                    // All logins + refresh run on the same IO thread to avoid
+                    // the non-volatile loginsMap visibility bug in the AWS SDK.
+                    linkUserPoolToIdentityPool(result.idToken)
 
                     // Update last login
                     updateLastLogin(result.user.id)
