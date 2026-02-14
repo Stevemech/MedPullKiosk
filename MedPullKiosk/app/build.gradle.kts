@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -31,9 +33,10 @@ android {
         buildConfigField("String", "AWS_S3_BUCKET", "\"medpull-hipaa-files-1759818639\"")
 
         // Claude API — key loaded from local.properties (not checked into git)
-        val localProperties = java.util.Properties().apply {
-            val localPropsFile = rootProject.file("local.properties")
-            if (localPropsFile.exists()) load(localPropsFile.inputStream())
+        val localProperties = Properties()
+        val localPropsFile = rootProject.file("local.properties")
+        if (localPropsFile.exists()) {
+            localPropsFile.inputStream().use { localProperties.load(it) }
         }
         buildConfigField("String", "CLAUDE_API_KEY", "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\"")
 
