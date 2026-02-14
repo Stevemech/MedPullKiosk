@@ -30,8 +30,13 @@ android {
         buildConfigField("String", "AWS_API_ENDPOINT", "\"https://d40uuum7hj.execute-api.us-east-1.amazonaws.com/prod\"")
         buildConfigField("String", "AWS_S3_BUCKET", "\"medpull-hipaa-files-1759818639\"")
 
-        // Claude API
-        buildConfigField("String", "CLAUDE_API_KEY", "\"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\"")
+        // Claude API — key loaded from local.properties (not checked into git)
+        val localProperties = java.util.Properties().apply {
+            val localPropsFile = rootProject.file("local.properties")
+            if (localPropsFile.exists()) load(localPropsFile.inputStream())
+        }
+        buildConfigField("String", "CLAUDE_API_KEY", "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\"")
+
 
         // Session timeout in milliseconds (15 minutes)
         buildConfigField("long", "SESSION_TIMEOUT_MS", "900000L")
