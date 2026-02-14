@@ -100,22 +100,37 @@ class TranslationService @Inject constructor(
 
     /**
      * Translate field values to English with automatic source language detection.
+     * Throws if ALL translations fail (indicates a systemic issue like missing IAM permissions).
      */
     suspend fun translateFieldValuesToEnglishAutoDetect(
         values: Map<String, String>
     ): Map<String, String> = withContext(Dispatchers.IO) {
         val translatedValues = mutableMapOf<String, String>()
+        var successCount = 0
+        var firstError: String? = null
 
         values.forEach { (fieldId, userInput) ->
             when (val result = translateToEnglishAutoDetect(userInput)) {
                 is TranslationResult.Success -> {
                     translatedValues[fieldId] = result.translatedText
+                    successCount++
+                    if (result.translatedText != userInput) {
+                        android.util.Log.d("TranslationService", "Translated: '$userInput' -> '${result.translatedText}'")
+                    } else {
+                        android.util.Log.d("TranslationService", "Already English (no change): '$userInput'")
+                    }
                 }
                 is TranslationResult.Error -> {
-                    // Keep original value if translation fails
                     translatedValues[fieldId] = userInput
+                    if (firstError == null) firstError = result.message
+                    android.util.Log.e("TranslationService", "Translation FAILED for '$userInput': ${result.message}")
                 }
             }
+        }
+
+        // If every single translation failed, throw so the caller can surface the error
+        if (successCount == 0 && firstError != null) {
+            throw RuntimeException("Translation failed: $firstError")
         }
 
         translatedValues

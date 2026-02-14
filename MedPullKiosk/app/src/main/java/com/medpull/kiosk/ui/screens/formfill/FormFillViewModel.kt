@@ -260,11 +260,14 @@ class FormFillViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Translate to English if user language is not English
-                val englishValues = if (_state.value.userLanguage != "en") {
-                    translationRepository.translateValuesToEnglishAutoDetect(filledValues)
-                } else {
-                    filledValues
+                // Auto-detect language of each field and translate to English if needed
+                Log.d(TAG, "Translating ${filledValues.size} field values to English...")
+                filledValues.forEach { (id, value) ->
+                    Log.d(TAG, "  Before translation: field=$id value='$value'")
+                }
+                val englishValues = translationRepository.translateValuesToEnglishAutoDetect(filledValues)
+                englishValues.forEach { (id, value) ->
+                    Log.d(TAG, "  After translation: field=$id value='$value'")
                 }
 
                 // Build fields with translated English values for PDF generation

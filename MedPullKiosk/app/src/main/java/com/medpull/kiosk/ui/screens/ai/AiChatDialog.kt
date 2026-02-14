@@ -1,5 +1,7 @@
 package com.medpull.kiosk.ui.screens.ai
 
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,10 +39,45 @@ fun AiChatDialog(
     formFields: List<FormField> = emptyList(),
     viewModel: AiAssistanceViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    var showHandwriting by remember { mutableStateOf(false) }
+    var speakingTimestamp by remember { mutableStateOf(-1L) }
+
+    // Text-to-speech
+    var ttsReady by remember { mutableStateOf(false) }
+    val tts = remember {
+        TextToSpeech(context) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { tts.shutdown() }
+    }
+
+    LaunchedEffect(language, ttsReady) {
+        if (ttsReady) {
+            val locale = when (language) {
+                "es" -> Locale("es")
+                "zh" -> Locale.CHINESE
+                "fr" -> Locale.FRENCH
+                "hi" -> Locale("hi")
+                "ar" -> Locale("ar")
+                else -> Locale.ENGLISH
+            }
+            tts.language = locale
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(utteranceId: String?) { speakingTimestamp = -1L }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) { speakingTimestamp = -1L }
+            })
+        }
+    }
 
     // Set language, context, and fields when dialog opens
     LaunchedEffect(language, formContext) {
@@ -124,7 +162,27 @@ fun AiChatDialog(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(state.messages) { message ->
-                                ChatMessageBubble(message = message)
+                                ChatMessageBubble(
+                                    message = message,
+                                    isSpeaking = speakingTimestamp == message.timestamp,
+                                    onSpeak = if (!message.isFromUser && ttsReady) {
+                                        {
+                                            if (speakingTimestamp == message.timestamp) {
+                                                tts.stop()
+                                                speakingTimestamp = -1L
+                                            } else {
+                                                tts.stop()
+                                                tts.speak(
+                                                    message.text,
+                                                    TextToSpeech.QUEUE_FLUSH,
+                                                    null,
+                                                    message.timestamp.toString()
+                                                )
+                                                speakingTimestamp = message.timestamp
+                                            }
+                                        }
+                                    } else null
+                                )
                             }
 
                             // Loading indicator
@@ -177,6 +235,18 @@ fun AiChatDialog(
                     }
                 }
 
+                // Handwriting input panel
+                if (showHandwriting) {
+                    HandwritingInput(
+                        language = language,
+                        onTextRecognized = { text ->
+                            messageText = if (messageText.isBlank()) text else "$messageText $text"
+                        },
+                        onSwitchToKeyboard = { showHandwriting = false },
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+
                 // Input area
                 Card(
                     modifier = Modifier
@@ -201,7 +271,16 @@ fun AiChatDialog(
                             maxLines = 3
                         )
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        // Handwriting toggle
+                        IconButton(
+                            onClick = { showHandwriting = !showHandwriting }
+                        ) {
+                            Icon(
+                                imageVector = if (showHandwriting) Icons.Default.Keyboard else Icons.Default.Draw,
+                                contentDescription = if (showHandwriting) "Switch to keyboard" else "Handwriting input",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
 
                         FloatingActionButton(
                             onClick = {
@@ -262,7 +341,11 @@ private fun EmptyState() {
 }
 
 @Composable
-private fun ChatMessageBubble(message: ChatMessage) {
+private fun ChatMessageBubble(
+    message: ChatMessage,
+    isSpeaking: Boolean = false,
+    onSpeak: (() -> Unit)? = null
+) {
     val dateFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     Row(
@@ -309,12 +392,30 @@ private fun ChatMessageBubble(message: ChatMessage) {
                 )
             }
 
-            Text(
-                text = dateFormat.format(Date(message.timestamp)),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
+            ) {
+                Text(
+                    text = dateFormat.format(Date(message.timestamp)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                // TTS button for AI messages
+                if (onSpeak != null) {
+                    IconButton(
+                        onClick = onSpeak,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                            contentDescription = if (isSpeaking) "Stop reading" else "Read aloud",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
         }
 
         if (message.isFromUser) {

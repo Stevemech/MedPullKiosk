@@ -59,11 +59,12 @@ class AiAssistanceViewModel @Inject constructor(
                     _state.value.formFieldsSummary?.let { append("Fields:\n$it") }
                 }.takeIf { it.isNotBlank() }
 
-                // Get AI response
+                // Get AI response with conversation history for multi-turn context
                 when (val result = aiRepository.sendChatMessage(
                     message = message,
                     language = _state.value.language,
-                    formContext = fullContext
+                    formContext = fullContext,
+                    conversationHistory = _state.value.messages
                 )) {
                     is AiChatResult.Success -> {
                         Log.d(TAG, "AI response received: ${result.message}")

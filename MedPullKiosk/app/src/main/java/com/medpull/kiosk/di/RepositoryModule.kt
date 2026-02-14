@@ -6,7 +6,7 @@ import com.medpull.kiosk.data.local.dao.AuditLogDao
 import com.medpull.kiosk.data.local.dao.FormDao
 import com.medpull.kiosk.data.local.dao.FormFieldDao
 import com.medpull.kiosk.data.local.dao.UserDao
-import com.medpull.kiosk.data.remote.ai.BedrockService
+import com.medpull.kiosk.data.remote.ai.ClaudeApiService
 import com.medpull.kiosk.data.remote.aws.CognitoAuthServiceV2
 import com.medpull.kiosk.data.remote.aws.S3Service
 import com.medpull.kiosk.data.remote.aws.TextractService
@@ -85,10 +85,10 @@ object RepositoryModule {
     @Provides
     @Singleton
     fun provideAiRepository(
-        bedrockService: BedrockService,
+        claudeApiService: ClaudeApiService,
         auditLogDao: AuditLogDao,
         authRepository: AuthRepository
     ): AiRepository {
-        return AiRepository(bedrockService, auditLogDao, authRepository)
+        return AiRepository(claudeApiService, auditLogDao, authRepository)
     }
 }

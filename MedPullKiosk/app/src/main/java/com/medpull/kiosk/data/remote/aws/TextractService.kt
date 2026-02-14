@@ -162,7 +162,7 @@ class TextractService @Inject constructor(
                     fieldType = fieldType,
                     originalText = trimmedKey,
                     translatedText = null,
-                    value = trimmedValue.takeIf { it.isNotBlank() },
+                    value = null, // Don't pre-fill — only user-entered values should appear on generated PDF
                     boundingBox = boundingBox,
                     labelBoundingBox = labelBoundingBox,
                     confidence = confidence,
@@ -437,7 +437,7 @@ class TextractService @Inject constructor(
                                 fieldName = if (maxRow > 2) "$headerLabel (Row $row)" else headerLabel,
                                 fieldType = determineFieldType(headerLabel),
                                 originalText = headerLabel,
-                                value = cellText.takeIf { !isPlaceholderText(it) && it.isNotBlank() },
+                                value = null, // Don't pre-fill — only user-entered values should appear on generated PDF
                                 boundingBox = bb,
                                 confidence = confidence,
                                 page = page
@@ -492,7 +492,7 @@ class TextractService @Inject constructor(
                                 fieldName = fieldName,
                                 fieldType = determineFieldType(labelText),
                                 originalText = labelText,
-                                value = cellText.takeIf { !isPlaceholderText(it) && it.isNotBlank() },
+                                value = null, // Don't pre-fill — only user-entered values should appear on generated PDF
                                 boundingBox = bb,
                                 labelBoundingBox = labelBB,
                                 confidence = confidence,

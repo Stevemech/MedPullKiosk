@@ -90,10 +90,12 @@ object Constants {
         const val RETRY_DELAY_MS = 1000L
     }
 
-    // AI Assistance — uses AWS Bedrock (Claude) via Cognito credentials
+    // AI Assistance — uses Anthropic Claude API directly
     object AI {
-        const val BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
-        const val MAX_TOKENS = 512
+        const val CLAUDE_MODEL = "claude-3-haiku-20240307"
+        const val CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
+        const val CLAUDE_API_VERSION = "2023-06-01"
+        const val MAX_TOKENS = 1024
     }
 
     // Audit Logging

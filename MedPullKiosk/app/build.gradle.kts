@@ -30,6 +30,9 @@ android {
         buildConfigField("String", "AWS_API_ENDPOINT", "\"https://d40uuum7hj.execute-api.us-east-1.amazonaws.com/prod\"")
         buildConfigField("String", "AWS_S3_BUCKET", "\"medpull-hipaa-files-1759818639\"")
 
+        // Claude API
+        buildConfigField("String", "CLAUDE_API_KEY", "\"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\"")
+
         // Session timeout in milliseconds (15 minutes)
         buildConfigField("long", "SESSION_TIMEOUT_MS", "900000L")
 
@@ -159,7 +162,8 @@ dependencies {
     // WorkManager (for background sync)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
-    // AI — using AWS Bedrock (Claude) via existing Cognito credentials
+    // ML Kit - Handwriting recognition
+    implementation("com.google.mlkit:digital-ink-recognition:18.1.0")
 
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")

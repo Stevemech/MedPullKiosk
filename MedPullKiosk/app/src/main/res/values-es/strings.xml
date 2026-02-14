@@ -54,10 +54,10 @@
     <string name="export_success">Formulario exportado correctamente</string>
 
     <!-- AI Assistance -->
-    <string name="ai_copilot">Copiloto de IA</string>
-    <string name="ai_subtitle">Chatea y traduce con OpenAI</string>
-    <string name="ask_ai_chat">Preguntar a IA</string>
-    <string name="ai_greeting">¡Hola! ¡Siéntete libre de preguntarme sobre cualquier pregunta del formulario!</string>
+    <string name="ai_copilot">Mira</string>
+    <string name="ai_subtitle">Tu asistente de formularios</string>
+    <string name="ask_ai_chat">Preguntar a Mira</string>
+    <string name="ai_greeting">¡Hola, soy Mira! Estoy aquí para ayudarte a completar tus formularios. Pregúntame sobre cualquier campo y te guiaré.</string>
 
     <!-- Security & Compliance -->
     <string name="hipaa_secure">Cumple con HIPAA y seguro</string>
