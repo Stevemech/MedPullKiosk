@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.medpull.kiosk.data.models.FieldType
 import com.medpull.kiosk.data.models.FormField
 import com.medpull.kiosk.data.repository.AuthRepository
 import com.medpull.kiosk.data.repository.FormRepository
@@ -60,6 +61,8 @@ class FormFillViewModel @Inject constructor(
             val language = localeManager.getCurrentLanguage(appContext)
             _state.update { it.copy(userLanguage = language) }
 
+            var hasTranslated = false
+
             try {
                 formRepository.getFormByIdFlow(formId)
                     .catch { e ->
@@ -77,8 +80,10 @@ class FormFillViewModel @Inject constructor(
                                 )
                             }
 
-                            // Auto-translate if non-English and fields lack translations
-                            if (language != "en" && form.fields.any { it.translatedText == null }) {
+                            // Auto-translate once if non-English and fields lack translations.
+                            // Guard prevents re-triggering on DB-write Flow re-emissions.
+                            if (!hasTranslated && language != "en" && form.fields.any { it.translatedText == null }) {
+                                hasTranslated = true
                                 translateAllFields(language)
                             }
                         } else {
@@ -205,9 +210,10 @@ class FormFillViewModel @Inject constructor(
      * Calculate form completion percentage
      */
     private fun calculateCompletionPercentage(fields: List<FormField>): Float {
-        if (fields.isEmpty()) return 0f
-        val filledCount = fields.count { !it.value.isNullOrBlank() }
-        return (filledCount.toFloat() / fields.size) * 100f
+        val fillableFields = fields.filter { it.fieldType != FieldType.STATIC_LABEL }
+        if (fillableFields.isEmpty()) return 0f
+        val filledCount = fillableFields.count { !it.value.isNullOrBlank() }
+        return (filledCount.toFloat() / fillableFields.size) * 100f
     }
 
     /**

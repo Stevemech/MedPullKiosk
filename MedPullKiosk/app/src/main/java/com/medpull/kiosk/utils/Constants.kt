@@ -78,7 +78,7 @@ object Constants {
     object Pdf {
         const val MAX_FILE_SIZE_MB = 50
         const val SUPPORTED_FORMATS = "application/pdf"
-        const val FORM_FIELD_CONFIDENCE_THRESHOLD = 0.85f
+        const val FORM_FIELD_CONFIDENCE_THRESHOLD = 0.80f
     }
 
     // Network
@@ -96,6 +96,12 @@ object Constants {
         const val CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
         const val CLAUDE_API_VERSION = "2023-06-01"
         const val MAX_TOKENS = 1024
+
+        // Claude Vision post-processing
+        const val CLAUDE_VISION_MODEL = "claude-haiku-4-5-20251001"
+        const val VISION_MAX_TOKENS = 8192
+        const val VISION_TIMEOUT_SECONDS = 120L
+        const val VISION_ENABLED = true
     }
 
     // Audit Logging

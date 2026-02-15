@@ -45,7 +45,13 @@ class TextractService @Inject constructor(
             // Extract form fields from result
             val formFields = extractFormFields(result, formId)
 
-            TextractResult.Success(formFields)
+            // Extract table structures for downstream table-aware processing
+            val tableStructures = extractTableStructures(result)
+
+            // Extract static text blocks (LINE blocks) for translation
+            val staticTextBlocks = extractStaticTextBlocks(result)
+
+            TextractResult.Success(formFields, tableStructures, staticTextBlocks)
         } catch (e: Exception) {
             TextractResult.Error(e.message ?: "Textract analysis failed")
         }
@@ -210,6 +216,24 @@ class TextractService @Inject constructor(
 
         // --- Extract fillable cells from TABLE blocks ---
         extractTableFields(blocks, blockMap, formId, fields)
+
+        // --- Remove fields inside legal notice / policy sections ---
+        val noticeLines = lineBlocks.filter { line ->
+            val text = line.text?.uppercase() ?: ""
+            text.contains("NOTICE OF") || text.contains("NONDISCRIMINATION") ||
+                text.contains("ACCESSIBILITY POLICY")
+        }
+        if (noticeLines.isNotEmpty()) {
+            val noticeTopByPage = noticeLines.groupBy { (it.page ?: 1) }
+                .mapValues { (_, lines) ->
+                    lines.minOf { it.geometry?.boundingBox?.top ?: 1f }
+                }
+            fields.removeAll { field ->
+                val fieldTop = field.boundingBox?.top ?: field.labelBoundingBox?.top ?: return@removeAll false
+                val noticeTop = noticeTopByPage[field.page] ?: return@removeAll false
+                fieldTop >= noticeTop
+            }
+        }
 
         return deduplicateFields(fields)
     }
@@ -388,10 +412,10 @@ class TextractService @Inject constructor(
             }
             if (maxRow < 1 || maxCol < 1) continue
 
-            // Determine if row 1 is a header row (all cells have text content)
-            val headerRowCells = (1..maxCol).mapNotNull { col -> grid[Pair(1, col)] }
-            val headerTexts = headerRowCells.map { getBlockText(it, blockMap).trim() }
-            val hasHeaderRow = headerTexts.all { it.isNotBlank() } && headerRowCells.size == maxCol
+            // Find header row (handles single-row and two-row headers)
+            val headerResult = findHeaderRow(grid, maxRow, maxCol, blockMap)
+            val headerTexts = headerResult?.second ?: emptyList()
+            val dataStartRow = if (headerResult != null) headerResult.first + 1 else -1
 
             // Also check if column 1 has labels (common in medical forms: label | value layout)
             val col1Texts = (1..maxRow).mapNotNull { row ->
@@ -399,9 +423,9 @@ class TextractService @Inject constructor(
             }
             val hasLabelColumn = col1Texts.count { it.isNotBlank() } > maxRow / 2
 
-            if (hasHeaderRow) {
-                // Process data rows (row 2+) with header labels
-                for (row in 2..maxRow) {
+            if (headerResult != null) {
+                // Process data rows (after header) with header labels
+                for (row in dataStartRow..maxRow) {
                     for (col in 1..maxCol) {
                         val cell = grid[Pair(row, col)] ?: continue
                         val cellText = getBlockText(cell, blockMap).trim()
@@ -506,6 +530,60 @@ class TextractService @Inject constructor(
     }
 
     /**
+     * Find the header row in a table grid.
+     * Tries row 1 first, then row 2 (for two-row headers like "Enroll In:" / "Dental").
+     * If row 1 has partial headers and row 2 fills gaps, merges them.
+     * Returns (headerRowIndex, headerTexts) or null if no header found.
+     */
+    private fun findHeaderRow(
+        grid: Map<Pair<Int, Int>, Block>,
+        maxRow: Int,
+        maxCol: Int,
+        blockMap: Map<String, Block>
+    ): Pair<Int, List<String>>? {
+        // Try row 1 as a complete header
+        val row1Cells = (1..maxCol).mapNotNull { col -> grid[Pair(1, col)] }
+        val row1Texts = (1..maxCol).map { col ->
+            grid[Pair(1, col)]?.let { getBlockText(it, blockMap).trim() } ?: ""
+        }
+        if (row1Texts.all { it.isNotBlank() } && row1Cells.size == maxCol) {
+            return Pair(1, row1Texts)
+        }
+
+        // Try row 2 as a complete header (common when row 1 has super-headers)
+        if (maxRow >= 2) {
+            val row2Cells = (1..maxCol).mapNotNull { col -> grid[Pair(2, col)] }
+            val row2Texts = (1..maxCol).map { col ->
+                grid[Pair(2, col)]?.let { getBlockText(it, blockMap).trim() } ?: ""
+            }
+            if (row2Texts.all { it.isNotBlank() } && row2Cells.size == maxCol) {
+                return Pair(2, row2Texts)
+            }
+
+            // Merge: use row 2 text when available, fall back to row 1 text
+            val mergedTexts = (1..maxCol).map { col ->
+                val r2 = row2Texts[col - 1]
+                val r1 = row1Texts[col - 1]
+                when {
+                    r2.isNotBlank() && r1.isNotBlank() -> r2 // prefer row 2 (more specific)
+                    r2.isNotBlank() -> r2
+                    r1.isNotBlank() -> r1
+                    else -> ""
+                }
+            }
+            if (mergedTexts.count { it.isNotBlank() } >= maxCol - 1) {
+                // Allow up to 1 missing header — fill blank with "Column N"
+                val finalTexts = mergedTexts.mapIndexed { idx, text ->
+                    text.ifBlank { "Column ${idx + 1}" }
+                }
+                return Pair(2, finalTexts)
+            }
+        }
+
+        return null
+    }
+
+    /**
      * Check if cell text is just a placeholder (underscores, dashes, dots, "N/A", etc.)
      */
     private fun isPlaceholderText(text: String): Boolean {
@@ -598,6 +676,170 @@ class TextractService @Inject constructor(
     }
 
     /**
+     * Extract table structures with precise cell geometry from Textract TABLE blocks.
+     * Returns grid metadata (column boundaries, row boundaries, cell bounding boxes)
+     * that downstream processors can use to generate precise FormFields.
+     */
+    private fun extractTableStructures(result: AnalyzeDocumentResult): List<TextractTableStructure> {
+        val blocks = result.blocks
+        val blockMap = blocks.associateBy { it.id }
+        val tableBlocks = blocks.filter { it.blockType == "TABLE" }
+        val structures = mutableListOf<TextractTableStructure>()
+
+        for (tableBlock in tableBlocks) {
+            val page = tableBlock.page ?: 1
+            val tableBB = tableBlock.geometry?.boundingBox ?: continue
+
+            // Collect CELL children
+            val cellBlocks = mutableListOf<Block>()
+            tableBlock.relationships?.forEach { rel ->
+                if (rel.type == "CHILD") {
+                    rel.ids.forEach { cellId ->
+                        blockMap[cellId]?.let { cell ->
+                            if (cell.blockType == "CELL") cellBlocks.add(cell)
+                        }
+                    }
+                }
+            }
+            if (cellBlocks.isEmpty()) continue
+
+            // Build grid
+            var maxRow = 0
+            var maxCol = 0
+            val grid = mutableMapOf<Pair<Int, Int>, Block>()
+            for (cell in cellBlocks) {
+                val row = cell.rowIndex ?: continue
+                val col = cell.columnIndex ?: continue
+                grid[Pair(row, col)] = cell
+                if (row > maxRow) maxRow = row
+                if (col > maxCol) maxCol = col
+            }
+            if (maxRow < 2 || maxCol < 1) continue // Need at least header + 1 data row
+
+            // Find header row (handles single-row and multi-row headers)
+            val headerResult = findHeaderRow(grid, maxRow, maxCol, blockMap)
+                ?: continue // Skip tables without identifiable headers
+            val (headerRowIdx, headerTexts) = headerResult
+            val dataStartRow = headerRowIdx + 1
+
+            if (dataStartRow > maxRow) continue // No data rows after header
+
+            // Collect column left edges and widths — try header row cells, then data row cells
+            val columnLeftEdges = mutableListOf<Float>()
+            val columnWidths = mutableListOf<Float>()
+            for (col in 1..maxCol) {
+                // Try header row first, then the row below it, then any row with this column
+                val cellBB = grid[Pair(headerRowIdx, col)]?.geometry?.boundingBox
+                    ?: grid[Pair(dataStartRow, col)]?.geometry?.boundingBox
+                    ?: (dataStartRow..maxRow).firstNotNullOfOrNull { r ->
+                        grid[Pair(r, col)]?.geometry?.boundingBox
+                    }
+                if (cellBB != null) {
+                    columnLeftEdges.add(cellBB.left)
+                    columnWidths.add(cellBB.width)
+                } else {
+                    val estimatedWidth = tableBB.width / maxCol
+                    columnLeftEdges.add(tableBB.left + (col - 1) * estimatedWidth)
+                    columnWidths.add(estimatedWidth)
+                }
+            }
+
+            // Collect row top edges from data rows
+            val rowTopEdges = mutableListOf<Float>()
+            val rowHeights = mutableListOf<Float>()
+            for (row in dataStartRow..maxRow) {
+                val firstCell = (1..maxCol).firstNotNullOfOrNull { col ->
+                    grid[Pair(row, col)]?.geometry?.boundingBox
+                }
+                if (firstCell != null) {
+                    rowTopEdges.add(firstCell.top)
+                    rowHeights.add(firstCell.height)
+                }
+            }
+
+            val avgRowHeight = if (rowHeights.isNotEmpty()) {
+                rowHeights.average().toFloat()
+            } else {
+                (tableBB.height / maxOf(maxRow - dataStartRow + 1, 1)).toFloat()
+            }
+
+            // Build cell info for data rows
+            val dataRowCount = maxRow - dataStartRow + 1
+            val cells = mutableListOf<TextractCellInfo>()
+            for (row in dataStartRow..maxRow) {
+                for (col in 1..maxCol) {
+                    val cell = grid[Pair(row, col)] ?: continue
+                    val cellBB = cell.geometry?.boundingBox ?: continue
+                    val cellText = getBlockText(cell, blockMap).trim()
+                    val selResult = detectSelectionElement(cell, blockMap)
+
+                    cells.add(
+                        TextractCellInfo(
+                            row = row - dataStartRow + 1, // 1-indexed data rows
+                            col = col,
+                            boundingBox = BoundingBox(cellBB.left, cellBB.top, cellBB.width, cellBB.height, page),
+                            text = cellText,
+                            isCheckbox = selResult != null,
+                            isSelected = selResult?.second == "true"
+                        )
+                    )
+                }
+            }
+
+            structures.add(
+                TextractTableStructure(
+                    page = page,
+                    tableBoundingBox = BoundingBox(tableBB.left, tableBB.top, tableBB.width, tableBB.height, page),
+                    headerTexts = headerTexts,
+                    columnLeftEdges = columnLeftEdges,
+                    columnWidths = columnWidths,
+                    rowTopEdges = rowTopEdges,
+                    averageRowHeight = avgRowHeight,
+                    detectedRowCount = dataRowCount,
+                    cells = cells
+                )
+            )
+        }
+
+        return structures
+    }
+
+    /**
+     * Extract static text blocks from Textract LINE blocks.
+     * These are non-fillable text like section headers, instructions, disclaimers, etc.
+     * Filters out very short text, Roman numeral section headers (on colored bars),
+     * and legal footer notices.
+     */
+    private fun extractStaticTextBlocks(result: AnalyzeDocumentResult): List<StaticTextBlock> {
+        val blocks = result.blocks
+        val lineBlocks = blocks.filter { it.blockType == "LINE" }
+
+        return lineBlocks.mapNotNull { block ->
+            val text = block.text?.trim() ?: return@mapNotNull null
+            val bb = block.geometry?.boundingBox ?: return@mapNotNull null
+            val page = block.page ?: 1
+
+            // Filter out very short text (< 3 chars)
+            if (text.length < 3) return@mapNotNull null
+
+            // Filter out Roman numeral section headers on colored bars
+            // (ALL CAPS text matching "I. ...", "II. ...", "III. ...", etc.)
+            val romanPattern = Regex("^[IVX]+\\.\\s+.*")
+            if (romanPattern.matches(text) && text == text.uppercase()) return@mapNotNull null
+
+            // Filter out legal footer notices
+            val upperText = text.uppercase()
+            if (upperText.contains("NOTICE OF") || upperText.contains("POLICY")) return@mapNotNull null
+
+            StaticTextBlock(
+                text = text,
+                boundingBox = BoundingBox(bb.left, bb.top, bb.width, bb.height, page),
+                page = page
+            )
+        }
+    }
+
+    /**
      * Start asynchronous document analysis (for large documents)
      */
     suspend fun startDocumentAnalysis(s3Key: String): String? = withContext(Dispatchers.IO) {
@@ -650,7 +892,48 @@ class TextractService @Inject constructor(
  * Textract result sealed class
  */
 sealed class TextractResult {
-    data class Success(val fields: List<FormField>) : TextractResult()
+    data class Success(
+        val fields: List<FormField>,
+        val tableStructures: List<TextractTableStructure> = emptyList(),
+        val staticTextBlocks: List<StaticTextBlock> = emptyList()
+    ) : TextractResult()
     object InProgress : TextractResult()
     data class Error(val message: String) : TextractResult()
 }
+
+/**
+ * Non-fillable text block extracted from Textract LINE blocks.
+ * Used for translating static text like section headers, instructions, and disclaimers.
+ */
+data class StaticTextBlock(
+    val text: String,
+    val boundingBox: BoundingBox,
+    val page: Int
+)
+
+/**
+ * Extracted table structure from Textract with precise cell geometry.
+ */
+data class TextractTableStructure(
+    val page: Int,
+    val tableBoundingBox: BoundingBox,
+    val headerTexts: List<String>,
+    val columnLeftEdges: List<Float>,
+    val columnWidths: List<Float>,
+    val rowTopEdges: List<Float>,
+    val averageRowHeight: Float,
+    val detectedRowCount: Int,
+    val cells: List<TextractCellInfo>
+)
+
+/**
+ * Individual cell info from Textract table extraction.
+ */
+data class TextractCellInfo(
+    val row: Int,
+    val col: Int,
+    val boundingBox: BoundingBox,
+    val text: String,
+    val isCheckbox: Boolean,
+    val isSelected: Boolean
+)

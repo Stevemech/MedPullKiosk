@@ -108,4 +108,18 @@ object NetworkModule {
     ): com.medpull.kiosk.data.remote.ai.ClaudeApiService {
         return com.medpull.kiosk.data.remote.ai.ClaudeApiService(okHttpClient, gson)
     }
+
+    @Provides
+    @Singleton
+    fun provideClaudeVisionService(
+        gson: Gson
+    ): com.medpull.kiosk.data.remote.ai.ClaudeVisionService {
+        return com.medpull.kiosk.data.remote.ai.ClaudeVisionService(gson)
+    }
+
+    @Provides
+    @Singleton
+    fun providePdfPageRenderer(): com.medpull.kiosk.data.remote.ai.PdfPageRenderer {
+        return com.medpull.kiosk.data.remote.ai.PdfPageRenderer()
+    }
 }

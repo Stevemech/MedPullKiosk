@@ -24,6 +24,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.medpull.kiosk.R
 import kotlinx.coroutines.launch
 import com.medpull.kiosk.data.models.FormField
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.text.intl.LocaleList
+import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -46,6 +59,40 @@ fun AiChatDialog(
     val coroutineScope = rememberCoroutineScope()
     var showHandwriting by remember { mutableStateOf(false) }
     var speakingTimestamp by remember { mutableStateOf(-1L) }
+    var isListening by remember { mutableStateOf(false) }
+
+    // Speech-to-text
+    val speechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    val speechRecognizer = remember {
+        if (speechAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+    val onSpeechResult = rememberUpdatedState { text: String ->
+        messageText = if (messageText.isBlank()) text else "$messageText $text"
+    }
+    val speechLocale = remember(language) {
+        when (language) {
+            "es" -> "es-ES"
+            "zh" -> "zh-CN"
+            "fr" -> "fr-FR"
+            "hi" -> "hi-IN"
+            "ar" -> "ar-SA"
+            else -> "en-US"
+        }
+    }
+    val startListening: () -> Unit = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLocale)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        speechRecognizer?.startListening(intent)
+        isListening = true
+    }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startListening()
+    }
 
     // Text-to-speech
     var ttsReady by remember { mutableStateOf(false) }
@@ -57,6 +104,25 @@ fun AiChatDialog(
 
     DisposableEffect(Unit) {
         onDispose { tts.shutdown() }
+    }
+
+    DisposableEffect(speechRecognizer) {
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle?) {
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!text.isNullOrBlank()) onSpeechResult.value(text)
+                isListening = false
+            }
+            override fun onError(error: Int) { isListening = false }
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        onDispose { speechRecognizer?.destroy() }
     }
 
     LaunchedEffect(language, ttsReady) {
@@ -268,6 +334,9 @@ fun AiChatDialog(
                             modifier = Modifier.weight(1f),
                             placeholder = { Text(stringResource(R.string.ask_ai_chat)) },
                             enabled = !state.isLoading,
+                            keyboardOptions = KeyboardOptions(
+                                hintLocales = LocaleList(speechLocale)
+                            ),
                             maxLines = 3
                         )
 
@@ -280,6 +349,33 @@ fun AiChatDialog(
                                 contentDescription = if (showHandwriting) "Switch to keyboard" else "Handwriting input",
                                 tint = MaterialTheme.colorScheme.primary
                             )
+                        }
+
+                        // Speech-to-text toggle
+                        if (speechAvailable) {
+                            IconButton(
+                                onClick = {
+                                    if (isListening) {
+                                        speechRecognizer?.stopListening()
+                                        isListening = false
+                                    } else if (ContextCompat.checkSelfPermission(
+                                            context, Manifest.permission.RECORD_AUDIO
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        startListening()
+                                    } else {
+                                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                },
+                                enabled = !state.isLoading
+                            ) {
+                                Icon(
+                                    imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                                    contentDescription = if (isListening) "Stop listening" else "Speech to text",
+                                    tint = if (isListening) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
 
                         FloatingActionButton(

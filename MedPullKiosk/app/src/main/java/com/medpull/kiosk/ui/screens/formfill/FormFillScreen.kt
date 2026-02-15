@@ -30,7 +30,21 @@ import com.medpull.kiosk.data.models.FieldType
 import com.medpull.kiosk.data.models.FormField
 import com.medpull.kiosk.ui.components.ActivityTracker
 import com.medpull.kiosk.ui.components.InteractivePdfViewer
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.intl.LocaleList
+import androidx.core.content.ContextCompat
 import com.medpull.kiosk.ui.screens.ai.AiChatDialog
+import com.medpull.kiosk.ui.screens.ai.HandwritingInput
 import com.medpull.kiosk.utils.SessionManager
 import java.io.File
 
@@ -264,6 +278,7 @@ fun FormFillScreen(
         if (field.fieldType != FieldType.CHECKBOX) {
             FieldInputDialog(
                 field = field,
+                language = state.userLanguage,
                 onDismiss = { viewModel.clearFieldSelection() },
                 onSave = { value ->
                     viewModel.updateFieldValue(field.id, value)
@@ -386,10 +401,66 @@ private fun ErrorState(message: String) {
 @Composable
 private fun FieldInputDialog(
     field: FormField,
+    language: String,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
 ) {
+    val context = LocalContext.current
     var value by remember { mutableStateOf(field.value ?: "") }
+    var showHandwriting by remember { mutableStateOf(false) }
+    var isListening by remember { mutableStateOf(false) }
+
+    // Speech-to-text
+    val speechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    val speechRecognizer = remember {
+        if (speechAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+    val onSpeechResult = rememberUpdatedState { text: String ->
+        value = if (value.isBlank()) text else "$value $text"
+    }
+    val speechLocale = remember(language) {
+        when (language) {
+            "es" -> "es-ES"
+            "zh" -> "zh-CN"
+            "fr" -> "fr-FR"
+            "hi" -> "hi-IN"
+            "ar" -> "ar-SA"
+            else -> "en-US"
+        }
+    }
+    val startListening: () -> Unit = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLocale)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        speechRecognizer?.startListening(intent)
+        isListening = true
+    }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startListening()
+    }
+
+    DisposableEffect(speechRecognizer) {
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle?) {
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!text.isNullOrBlank()) onSpeechResult.value(text)
+                isListening = false
+            }
+            override fun onError(error: Int) { isListening = false }
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        onDispose { speechRecognizer?.destroy() }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -427,10 +498,63 @@ private fun FieldInputDialog(
                             FieldType.NUMBER -> KeyboardType.Number
                             FieldType.DATE -> KeyboardType.Number
                             else -> KeyboardType.Text
-                        }
+                        },
+                        hintLocales = LocaleList(speechLocale)
                     ),
                     singleLine = field.fieldType != FieldType.TEXT
                 )
+
+                // Handwriting & speech-to-text input toggles
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    IconButton(
+                        onClick = { showHandwriting = !showHandwriting }
+                    ) {
+                        Icon(
+                            imageVector = if (showHandwriting) Icons.Default.Keyboard else Icons.Default.Draw,
+                            contentDescription = if (showHandwriting) "Switch to keyboard" else "Handwriting input",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    if (speechAvailable) {
+                        IconButton(
+                            onClick = {
+                                if (isListening) {
+                                    speechRecognizer?.stopListening()
+                                    isListening = false
+                                } else if (ContextCompat.checkSelfPermission(
+                                        context, Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    startListening()
+                                } else {
+                                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = if (isListening) "Stop listening" else "Speech to text",
+                                tint = if (isListening) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                // Handwriting input panel
+                if (showHandwriting) {
+                    HandwritingInput(
+                        language = language,
+                        onTextRecognized = { text ->
+                            value = if (value.isBlank()) text else "$value $text"
+                        },
+                        onSwitchToKeyboard = { showHandwriting = false }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 

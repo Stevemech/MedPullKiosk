@@ -62,6 +62,7 @@ enum class FieldType {
     RADIO,
     SIGNATURE,
     DROPDOWN,
+    STATIC_LABEL,
     UNKNOWN
 }
 

@@ -1,5 +1,6 @@
 package com.medpull.kiosk.ui.screens.formselection
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,7 +10,9 @@ import com.medpull.kiosk.data.repository.AuthRepository
 import com.medpull.kiosk.data.repository.FormProcessResult
 import com.medpull.kiosk.data.repository.FormRepository
 import com.medpull.kiosk.utils.Constants
+import com.medpull.kiosk.utils.LocaleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -22,7 +25,9 @@ import javax.inject.Inject
 @HiltViewModel
 class FormSelectionViewModel @Inject constructor(
     private val formRepository: FormRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val localeManager: LocaleManager,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     companion object {
@@ -106,14 +111,21 @@ class FormSelectionViewModel @Inject constructor(
 
                 Log.d(TAG, "Starting form upload: ${file.name}")
 
-                // Simulate upload progress (in real implementation, track S3 upload progress)
-                for (progress in 0..100 step 10) {
-                    _state.update { it.copy(uploadProgress = progress / 100f) }
-                    kotlinx.coroutines.delay(100)
-                }
+                // Resolve language for parallel translation during processing
+                val language = localeManager.getCurrentLanguage(appContext)
 
-                // Upload and process form
-                val result = formRepository.uploadAndProcessForm(file, userId, formId)
+                _state.update { it.copy(uploadProgress = 0.05f) }
+
+                // Upload and process form with real progress tracking
+                val result = formRepository.uploadAndProcessForm(
+                    file = file,
+                    userId = userId,
+                    formId = formId,
+                    targetLanguage = language,
+                    onProgress = { progress ->
+                        _state.update { it.copy(uploadProgress = progress) }
+                    }
+                )
 
                 when (result) {
                     is FormProcessResult.Success -> {
