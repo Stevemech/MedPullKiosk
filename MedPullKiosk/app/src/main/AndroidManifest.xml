@@ -58,6 +58,21 @@
             </intent-filter>
         </activity>
 
+        <!-- SMART on FHIR OAuth2 redirect handler -->
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:exported="true"
+            tools:node="replace">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="com.medpull.kiosk"
+                    android:host="fhir-callback" />
+            </intent-filter>
+        </activity>
+
         <!-- WorkManager initialization -->
         <provider
             android:name="androidx.startup.InitializationProvider"

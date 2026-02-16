@@ -80,8 +80,10 @@ fun ExportScreen(
                 else -> {
                     ExportOptions(
                         isExporting = state.isExporting,
+                        isFhirConfigured = viewModel.isFhirConfigured(),
                         onExportToCloud = { viewModel.exportToS3() },
                         onExportToLocal = { viewModel.exportToLocal() },
+                        onExportToFhir = { viewModel.exportToFhir() },
                         onPreview = { viewModel.previewExport() }
                     )
                 }
@@ -218,8 +220,10 @@ private fun IncompleteFormState(completionPercentage: Float) {
 @Composable
 private fun ExportOptions(
     isExporting: Boolean,
+    isFhirConfigured: Boolean = false,
     onExportToCloud: () -> Unit,
     onExportToLocal: () -> Unit,
+    onExportToFhir: () -> Unit = {},
     onPreview: () -> Unit
 ) {
     Column(
@@ -325,6 +329,46 @@ private fun ExportOptions(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
+                }
+            }
+        }
+
+        // Export to FHIR button (only shown if configured)
+        if (isFhirConfigured) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                onClick = onExportToFhir,
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(100.dp),
+                enabled = !isExporting
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalHospital,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(24.dp))
+                    Column {
+                        Text(
+                            text = "Export to FHIR",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Send to EHR system via FHIR R4",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
                 }
             }
         }

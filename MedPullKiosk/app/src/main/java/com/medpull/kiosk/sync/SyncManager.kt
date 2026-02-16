@@ -176,6 +176,12 @@ class SyncManager @Inject constructor(
                 // Form export is handled by FormRepository
                 Log.d(TAG, "Form export for: ${payload.formId}")
             }
+
+            SyncOperationType.FHIR_EXPORT_FORM -> {
+                val payload = gson.fromJson(operation.payload, ExportFormPayload::class.java)
+                // FHIR export is handled by FhirRepository
+                Log.d(TAG, "FHIR form export for: ${payload.formId}")
+            }
         }
 
         // Mark as completed

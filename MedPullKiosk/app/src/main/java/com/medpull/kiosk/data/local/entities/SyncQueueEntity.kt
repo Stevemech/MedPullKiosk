@@ -77,7 +77,8 @@ enum class SyncOperationType {
     SYNC_AUDIT_LOG,
     UPDATE_FORM_STATUS,
     DELETE_FORM,
-    EXPORT_FORM
+    EXPORT_FORM,
+    FHIR_EXPORT_FORM
 }
 
 /**

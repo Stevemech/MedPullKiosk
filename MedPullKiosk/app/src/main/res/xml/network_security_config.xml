@@ -49,6 +49,12 @@
         </trust-anchors>
     </domain-config>
 
+    <!-- Local FHIR server (for testing with docker HAPI FHIR) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+
     <!-- Debug configuration (only for debug builds) -->
     <debug-overrides>
         <trust-anchors>

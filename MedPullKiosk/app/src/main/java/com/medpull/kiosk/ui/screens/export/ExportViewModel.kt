@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.medpull.kiosk.data.models.FormStatus
 import com.medpull.kiosk.data.repository.FormRepository
 import com.medpull.kiosk.data.repository.StorageRepository
+import com.medpull.kiosk.healthcare.repository.FhirRepository
 import com.medpull.kiosk.utils.PdfUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,6 +28,7 @@ class ExportViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val formRepository: FormRepository,
     private val storageRepository: StorageRepository,
+    private val fhirRepository: FhirRepository,
     private val pdfUtils: PdfUtils,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -268,6 +270,80 @@ class ExportViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Export to FHIR server as QuestionnaireResponse + DocumentReference
+     */
+    fun exportToFhir() {
+        viewModelScope.launch {
+            try {
+                _state.update { it.copy(isExporting = true, error = null) }
+
+                val form = _state.value.form
+                if (form == null) {
+                    _state.update { it.copy(error = "No form to export", isExporting = false) }
+                    return@launch
+                }
+
+                // Generate filled PDF for DocumentReference
+                val filledPdf = pdfUtils.generateFilledPdf(
+                    originalPdfPath = form.originalFileUri,
+                    fields = form.fields,
+                    outputDir = context.cacheDir
+                )
+
+                val pdfData = filledPdf?.readBytes()
+
+                // Look up associated FHIR patient ID
+                val patientFhirId = fhirRepository.getFhirId(form.id, "Patient")
+
+                val result = fhirRepository.exportFormToFhir(
+                    userId = form.userId,
+                    form = form,
+                    patientFhirId = patientFhirId,
+                    pdfData = pdfData
+                )
+
+                // Cleanup temp file
+                filledPdf?.delete()
+
+                if (result.isSuccess) {
+                    formRepository.updateFormStatus(formId, FormStatus.EXPORTED)
+                    val exportResult = result.getOrThrow()
+                    _state.update {
+                        it.copy(
+                            isExporting = false,
+                            exportSuccess = true,
+                            exportMessage = "Form exported to FHIR server (ID: ${exportResult.questionnaireResponseId})"
+                        )
+                    }
+                    Log.d(TAG, "Form exported to FHIR: ${exportResult.questionnaireResponseId}")
+                } else {
+                    _state.update {
+                        it.copy(
+                            error = "FHIR export failed: ${result.exceptionOrNull()?.message}",
+                            isExporting = false
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error exporting to FHIR", e)
+                _state.update {
+                    it.copy(
+                        error = "FHIR export failed: ${e.message}",
+                        isExporting = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if FHIR server is configured
+     */
+    fun isFhirConfigured(): Boolean {
+        return fhirRepository.loadServerConfig().isConfigured
     }
 
     /**

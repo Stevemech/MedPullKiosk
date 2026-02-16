@@ -58,3 +58,18 @@
 # Keep Tink crypto and ignore error-prone annotations (compile-time only)
 -keep class com.google.crypto.tink.** { *; }
 -dontwarn com.google.errorprone.annotations.**
+
+# HAPI FHIR
+-keep class ca.uhn.fhir.** { *; }
+-keep class org.hl7.fhir.** { *; }
+-dontwarn ca.uhn.fhir.**
+-dontwarn org.hl7.fhir.**
+-dontwarn org.apache.commons.**
+-dontwarn org.slf4j.**
+
+# Healthcare models
+-keep class com.medpull.kiosk.healthcare.models.** { *; }
+
+# AppAuth
+-keep class net.openid.appauth.** { *; }
+-dontwarn net.openid.appauth.**

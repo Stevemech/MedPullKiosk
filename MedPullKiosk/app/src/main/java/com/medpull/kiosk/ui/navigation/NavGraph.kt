@@ -18,6 +18,7 @@ import androidx.navigation.NavType
 import com.medpull.kiosk.ui.screens.auth.LoginScreen
 import com.medpull.kiosk.ui.screens.auth.RegisterScreen
 import com.medpull.kiosk.ui.screens.auth.VerificationScreen
+import com.medpull.kiosk.healthcare.ui.FhirSettingsScreen
 import com.medpull.kiosk.ui.screens.export.ExportScreen
 import com.medpull.kiosk.ui.screens.formselection.FormSelectionScreen
 import com.medpull.kiosk.ui.screens.formfill.FormFillScreen
@@ -184,6 +185,14 @@ fun NavGraph(
         composable(Screen.Export.route) {
             ExportScreen(
                 sessionManager = sessionManager,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.FhirSettings.route) {
+            FhirSettingsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

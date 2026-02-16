@@ -99,6 +99,9 @@ android {
             excludes += "META-INF/NOTICE.txt"
             excludes += "META-INF/notice.txt"
             excludes += "META-INF/ASL2.0"
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/MANIFEST.MF"
+            excludes += "META-INF/*.kotlin_module"
         }
     }
 }
@@ -175,6 +178,13 @@ dependencies {
 
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // HAPI FHIR R4
+    implementation("ca.uhn.hapi.fhir:hapi-fhir-base:7.4.0")
+    implementation("ca.uhn.hapi.fhir:hapi-fhir-structures-r4:7.4.0")
+
+    // AppAuth for SMART on FHIR OAuth2
+    implementation("net.openid:appauth:0.11.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
