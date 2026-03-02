@@ -126,7 +126,7 @@ fun InventoryScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(state.filteredItems, key = { "${it.location}-${it.boxLabel}-${it.itemType}" }) { item ->
+                        items(state.filteredItems, key = { "${it.room}-${it.location}-${it.itemName}" }) { item ->
                             InventoryItemCard(item = item)
                         }
                     }
@@ -244,16 +244,16 @@ private fun InventoryItemCard(item: InventoryItem) {
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Top row: item type + quantity badge
+            // Top row: item name + quantity badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = item.itemType,
+                    text = item.itemName,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
@@ -262,9 +262,9 @@ private fun InventoryItemCard(item: InventoryItem) {
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Box label
+            // Type + box label
             Text(
-                text = item.boxLabel,
+                text = listOfNotNull(item.itemType.ifBlank { null }, item.boxLabel.ifBlank { null }).joinToString(" - "),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 maxLines = 1,
@@ -278,7 +278,7 @@ private fun InventoryItemCard(item: InventoryItem) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                InfoChip(icon = Icons.Default.LocationOn, text = item.location)
+                InfoChip(icon = Icons.Default.LocationOn, text = "${item.room} - ${item.location}")
                 InfoChip(icon = Icons.Default.Category, text = item.category)
             }
 
@@ -303,17 +303,6 @@ private fun InventoryItemCard(item: InventoryItem) {
                 }
             }
 
-            // Additional descriptor
-            if (item.additionalDescriptor.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = item.additionalDescriptor,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
     }
 }

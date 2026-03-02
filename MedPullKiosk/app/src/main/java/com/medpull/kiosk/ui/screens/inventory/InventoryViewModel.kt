@@ -119,11 +119,12 @@ class InventoryViewModel @Inject constructor(
         if (current.searchQuery.isNotBlank()) {
             val query = current.searchQuery.lowercase()
             filtered = filtered.filter { item ->
-                item.itemType.lowercase().contains(query) ||
+                item.itemName.lowercase().contains(query) ||
+                        item.itemType.lowercase().contains(query) ||
                         item.boxLabel.lowercase().contains(query) ||
                         item.category.lowercase().contains(query) ||
                         item.location.lowercase().contains(query) ||
-                        item.additionalDescriptor.lowercase().contains(query)
+                        item.room.lowercase().contains(query)
             }
         }
 

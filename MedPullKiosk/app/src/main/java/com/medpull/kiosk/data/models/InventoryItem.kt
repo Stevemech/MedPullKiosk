@@ -6,16 +6,17 @@ import java.util.Locale
 
 data class InventoryItem(
     val location: String,
+    val itemName: String,
     val itemType: String,
     val category: String,
     val boxLabel: String,
     val quantity: Int,
     val threshold: Int,
     val expirationDates: String,
-    val additionalDescriptor: String
+    val room: String = ""
 ) {
     val isLowStock: Boolean
-        get() = quantity <= threshold
+        get() = threshold > 0 && quantity <= threshold
 
     val isExpiringSoon: Boolean
         get() {
