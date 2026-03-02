@@ -22,6 +22,7 @@ import com.medpull.kiosk.healthcare.ui.FhirSettingsScreen
 import com.medpull.kiosk.ui.screens.export.ExportScreen
 import com.medpull.kiosk.ui.screens.formselection.FormSelectionScreen
 import com.medpull.kiosk.ui.screens.formfill.FormFillScreen
+import com.medpull.kiosk.ui.screens.inventory.InventoryScreen
 import com.medpull.kiosk.ui.screens.language.LanguageSelectionScreen
 import com.medpull.kiosk.ui.screens.welcome.WelcomeScreen
 import com.medpull.kiosk.ui.screens.welcome.WelcomeViewModel
@@ -166,6 +167,9 @@ fun NavGraph(
                 },
                 onFormSelected = { formId ->
                     navController.navigate(Screen.FormFill.createRoute(formId))
+                },
+                onNavigateToInventory = {
+                    navController.navigate(Screen.Inventory.route)
                 }
             )
         }
@@ -185,6 +189,14 @@ fun NavGraph(
         composable(Screen.Export.route) {
             ExportScreen(
                 sessionManager = sessionManager,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.Inventory.route) {
+            InventoryScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

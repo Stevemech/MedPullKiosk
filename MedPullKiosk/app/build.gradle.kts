@@ -40,6 +40,9 @@ android {
         }
         buildConfigField("String", "CLAUDE_API_KEY", "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\"")
 
+        // Google Sheets Inventory
+        buildConfigField("String", "GOOGLE_SHEETS_API_KEY", "\"${localProperties.getProperty("GOOGLE_SHEETS_API_KEY", "")}\"")
+        buildConfigField("String", "INVENTORY_SPREADSHEET_ID", "\"${localProperties.getProperty("INVENTORY_SPREADSHEET_ID", "")}\"")
 
         // Session timeout in milliseconds (15 minutes)
         buildConfigField("long", "SESSION_TIMEOUT_MS", "900000L")
