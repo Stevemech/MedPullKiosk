@@ -1,0 +1,417 @@
+/* ── Reset & Base ──────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-success: #16a34a;
+  --color-success-bg: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-bg: #fef3c7;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fee2e2;
+  --color-muted: #6b7280;
+  --color-muted-bg: #f3f4f6;
+  --color-border: #e5e7eb;
+  --color-text: #111827;
+  --color-text-secondary: #4b5563;
+  --radius: 8px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  width: 420px;
+  min-height: 500px;
+  padding: 16px;
+}
+
+/* ── Header ───────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 100px;
+  background: var(--color-muted-bg);
+  color: var(--color-muted);
+}
+
+.status-badge.connected {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.status-badge.error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Sections ─────────────────────────────────────────────────── */
+.section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-muted);
+  margin-bottom: 10px;
+}
+
+/* ── Textarea ─────────────────────────────────────────────────── */
+textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+textarea::placeholder {
+  color: var(--color-muted);
+}
+
+/* ── File Upload ──────────────────────────────────────────────── */
+.file-upload-wrapper {
+  margin-top: 10px;
+}
+
+.file-upload-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.file-upload-label:hover {
+  border-color: var(--color-primary);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.file-upload-label input[type="file"] {
+  display: none;
+}
+
+.file-name {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 4px;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.btn-success {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #15803d;
+}
+
+/* ── Review Panel ─────────────────────────────────────────────── */
+.review-panel {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.decision-card {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  background: var(--color-surface);
+  transition: border-color 0.15s;
+}
+
+.decision-card.fill {
+  border-left: 3px solid var(--color-success);
+}
+
+.decision-card.skip {
+  border-left: 3px solid var(--color-muted);
+}
+
+.decision-card.flag {
+  border-left: 3px solid var(--color-danger);
+}
+
+.decision-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.decision-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.decision-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+
+.decision-badge.fill {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.decision-badge.skip {
+  background: var(--color-muted-bg);
+  color: var(--color-muted);
+}
+
+.decision-badge.flag {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.decision-value {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.decision-value strong {
+  color: var(--color-text);
+}
+
+.decision-reasoning {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.confidence-bar {
+  margin-top: 6px;
+  height: 4px;
+  background: var(--color-muted-bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.confidence-fill.high {
+  background: var(--color-success);
+}
+
+.confidence-fill.medium {
+  background: var(--color-warning);
+}
+
+.confidence-fill.low {
+  background: var(--color-danger);
+}
+
+/* ── Missing Required ─────────────────────────────────────────── */
+.missing-required {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius);
+}
+
+.missing-required h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-warning);
+  margin-bottom: 6px;
+}
+
+.missing-required ul {
+  list-style: none;
+  padding: 0;
+}
+
+.missing-required li {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  padding: 2px 0;
+}
+
+.missing-required li::before {
+  content: "⚠ ";
+}
+
+/* ── Screenshot Preview ───────────────────────────────────────── */
+.screenshot-preview {
+  margin-top: 10px;
+}
+
+.screenshot-preview img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+
+/* ── Error / Info Messages ────────────────────────────────────── */
+.message {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.message.error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+
+.message.info {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93bbfd;
+}
+
+.message.success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+/* ── Spinner ──────────────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────── */
+.review-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.review-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.review-panel::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.review-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* ── Hidden ───────────────────────────────────────────────────── */
+.hidden {
+  display: none !important;
+}

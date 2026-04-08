@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "MedPull eClinicalWorks Assistant",
+  "version": "1.0.0",
+  "description": "AI-powered clinical transcript processing and eClinicalWorks form filling with clinician review and confirmation.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://*.eclinicalworks.com/*",
+    "https://*.ecw.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.eclinicalworks.com/*",
+        "https://*.ecw.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "MedPull Assistant"
+  },
+  "icons": {}
+}

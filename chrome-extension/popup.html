@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedPull Assistant</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <h1>MedPull Assistant</h1>
+    <span id="serverStatus" class="status-badge">
+      <span class="status-dot"></span>
+      Checking…
+    </span>
+  </div>
+
+  <!-- Input Section -->
+  <div class="section">
+    <div class="section-title">Clinical Transcript</div>
+    <textarea
+      id="transcriptInput"
+      placeholder="Paste or type the clinical transcript here…"
+    ></textarea>
+    <div class="file-upload-wrapper">
+      <label class="file-upload-label">
+        <span>📎 Upload File</span>
+        <input type="file" id="fileUpload" accept=".txt,.pdf,.hl7,.json" />
+      </label>
+      <div id="fileName" class="file-name"></div>
+    </div>
+  </div>
+
+  <!-- Process Button -->
+  <button id="processBtn" class="btn btn-primary" disabled>
+    Process &amp; Fill
+  </button>
+
+  <!-- Review Section (hidden until results arrive) -->
+  <div id="reviewSection" class="section hidden">
+    <div class="section-title">Field Decisions — Review Required</div>
+    <div id="reviewPanel" class="review-panel"></div>
+
+    <!-- Missing Required Fields -->
+    <div id="missingRequired" class="missing-required hidden">
+      <h4>Missing Required Fields</h4>
+      <ul id="missingList"></ul>
+    </div>
+  </div>
+
+  <!-- Confirm & Submit Button (hidden until review) -->
+  <button id="confirmBtn" class="btn btn-success hidden" disabled>
+    Confirm &amp; Submit to eClinicalWorks
+  </button>
+
+  <!-- Execution Result -->
+  <div id="executionResult" class="hidden">
+    <div id="resultMessage" class="message"></div>
+    <div id="screenshotPreview" class="screenshot-preview hidden"></div>
+  </div>
+
+  <!-- Error Messages -->
+  <div id="errorMessage" class="message error hidden"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
