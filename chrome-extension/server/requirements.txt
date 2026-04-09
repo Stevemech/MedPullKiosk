@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-litellm
-playwright
-pydantic
-python-dotenv

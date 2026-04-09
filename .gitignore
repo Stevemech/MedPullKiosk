@@ -11,3 +11,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# IDE
+.idea/
+
+# Docker
+docker-compose.override.yml
