@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MedPull eClinicalWorks Assistant",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "AI-powered clinical transcript processing and eClinicalWorks form filling with clinician review and confirmation.",
   "permissions": [
     "activeTab",
@@ -11,6 +11,7 @@
   ],
   "host_permissions": [
     "http://localhost:8000/*",
+    "https://YOUR_ALB_DOMAIN_HERE/*",
     "https://*.eclinicalworks.com/*",
     "https://*.ecw.com/*"
   ],

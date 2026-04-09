@@ -16,28 +16,47 @@
     </span>
   </div>
 
-  <!-- Input Section -->
-  <div class="section">
-    <div class="section-title">Clinical Transcript</div>
-    <textarea
-      id="transcriptInput"
-      placeholder="Paste or type the clinical transcript here…"
-    ></textarea>
-    <div class="file-upload-wrapper">
-      <label class="file-upload-label">
-        <span>📎 Upload File</span>
-        <input type="file" id="fileUpload" accept=".txt,.pdf,.hl7,.json" />
-      </label>
-      <div id="fileName" class="file-name"></div>
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab active" data-tab="queue">Form Queue</button>
+    <button class="tab" data-tab="manual">Manual Transcript</button>
+  </div>
+
+  <!-- Tab: Form Queue -->
+  <div id="tab-queue" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">Pending Forms</div>
+        <button id="refreshBtn" class="btn-icon" title="Refresh">&#x21bb;</button>
+      </div>
+      <div id="formQueue" class="form-queue">
+        <div class="message info">Loading form queue…</div>
+      </div>
     </div>
   </div>
 
-  <!-- Process Button -->
-  <button id="processBtn" class="btn btn-primary" disabled>
-    Process &amp; Fill
-  </button>
+  <!-- Tab: Manual Transcript -->
+  <div id="tab-manual" class="tab-content hidden">
+    <div class="section">
+      <div class="section-title">Clinical Transcript</div>
+      <textarea
+        id="transcriptInput"
+        placeholder="Paste or type the clinical transcript here…"
+      ></textarea>
+      <div class="file-upload-wrapper">
+        <label class="file-upload-label">
+          <span>Upload File</span>
+          <input type="file" id="fileUpload" accept=".txt,.pdf,.hl7,.json" />
+        </label>
+        <div id="fileName" class="file-name"></div>
+      </div>
+    </div>
+    <button id="processBtn" class="btn btn-primary" disabled>
+      Process &amp; Fill
+    </button>
+  </div>
 
-  <!-- Review Section (hidden until results arrive) -->
+  <!-- Review Section (shared, hidden until results arrive) -->
   <div id="reviewSection" class="section hidden">
     <div class="section-title">Field Decisions — Review Required</div>
     <div id="reviewPanel" class="review-panel"></div>
@@ -49,19 +68,35 @@
     </div>
   </div>
 
-  <!-- Confirm & Submit Button (hidden until review) -->
+  <!-- Confirm & Fill Button (hidden until review) -->
   <button id="confirmBtn" class="btn btn-success hidden" disabled>
-    Confirm &amp; Submit to eClinicalWorks
+    Confirm &amp; Fill eClinicalWorks
   </button>
 
   <!-- Execution Result -->
   <div id="executionResult" class="hidden">
     <div id="resultMessage" class="message"></div>
-    <div id="screenshotPreview" class="screenshot-preview hidden"></div>
   </div>
 
   <!-- Error Messages -->
   <div id="errorMessage" class="message error hidden"></div>
+
+  <!-- Settings (collapsible) -->
+  <details class="settings-section">
+    <summary class="settings-toggle">Settings</summary>
+    <div class="settings-body">
+      <label class="settings-label">
+        Server URL
+        <input type="text" id="settingsServerUrl" placeholder="https://your-alb-domain.com" />
+      </label>
+      <label class="settings-label">
+        API Key
+        <input type="password" id="settingsApiKey" placeholder="Your clinic API key" />
+      </label>
+      <button id="saveSettingsBtn" class="btn btn-primary btn-sm">Save Settings</button>
+      <div id="settingsSaved" class="message success hidden" style="margin-top:8px;">Settings saved.</div>
+    </div>
+  </details>
 
   <script src="popup.js"></script>
 </body>

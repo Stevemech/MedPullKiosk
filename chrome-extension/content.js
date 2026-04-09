@@ -120,13 +120,22 @@ function resolveLabel(el) {
  *
  * @param {Array<{field_id: string, label: string, action: string,
  *                 value: string|null, reasoning: string}>} decisions
+ * @returns {{success: boolean, filled: number, errors: string[]}}
  */
 function highlightDecisions(decisions) {
-  if (!Array.isArray(decisions)) return;
+  if (!Array.isArray(decisions)) return { success: false, filled: 0, errors: ["No decisions provided"] };
+
+  let filled = 0;
+  const errors = [];
 
   for (const d of decisions) {
     const el = findElement(d.field_id, d.label);
-    if (!el) continue;
+    if (!el) {
+      if (d.action === "fill") {
+        errors.push(`Field '${d.label || d.field_id}' not found in DOM`);
+      }
+      continue;
+    }
 
     /* Remove any previous MedPull styling */
     el.style.removeProperty("outline");
@@ -137,7 +146,12 @@ function highlightDecisions(decisions) {
       case "fill":
         el.style.outline = "2px solid #16a34a";
         if (d.value !== null && d.value !== undefined) {
-          setFieldValue(el, d.value);
+          try {
+            setFieldValue(el, d.value);
+            filled++;
+          } catch (e) {
+            errors.push(`Field '${d.label || d.field_id}': ${e.message}`);
+          }
         }
         break;
 
@@ -153,6 +167,8 @@ function highlightDecisions(decisions) {
         break;
     }
   }
+
+  return { success: errors.length === 0, filled, errors };
 }
 
 /**
@@ -224,8 +240,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.action === "highlightDecisions") {
-    highlightDecisions(message.decisions);
-    sendResponse({ success: true });
+    const result = highlightDecisions(message.decisions);
+    sendResponse(result);
+    return true;
+  }
+
+  if (message.action === "fillAndHighlight") {
+    const result = highlightDecisions(message.decisions);
+    sendResponse(result);
     return true;
   }
 

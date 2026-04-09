@@ -1,0 +1,282 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: MedPull Server — ECS Fargate + DynamoDB + ALB
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to deploy into
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets for ALB and ECS tasks (at least 2)
+
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN for HTTPS on the ALB
+
+  ImageUri:
+    Type: String
+    Description: ECR image URI (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/medpull-server:latest)
+
+Resources:
+  # ── ECR Repository ──────────────────────────────────────────────
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: medpull-server
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+
+  # ── DynamoDB Table ──────────────────────────────────────────────
+  FormsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: medpull-forms
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: clinic_id
+          AttributeType: S
+        - AttributeName: form_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: clinic_id
+          KeyType: HASH
+        - AttributeName: form_id
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ── Secrets Manager ─────────────────────────────────────────────
+  AppSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: medpull/server-config
+      Description: MedPull server environment secrets
+      SecretString: !Sub |
+        {
+          "XAI_API_KEY": "REPLACE_ME",
+          "MODEL_PRIMARY": "xai/grok-3-mini",
+          "MODEL_FALLBACK": "xai/grok-3",
+          "MEDPULL_API_KEYS": "REPLACE_ME",
+          "MEDPULL_KEY_MAP": "REPLACE_ME:clinic_001"
+        }
+
+  # ── CloudWatch Log Group ────────────────────────────────────────
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/medpull-server
+      RetentionInDays: 30
+
+  # ── ECS Cluster ─────────────────────────────────────────────────
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: medpull
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # ── IAM — Task Execution Role (pulling images, writing logs) ────
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: medpull-task-execution-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: secrets-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref AppSecrets
+
+  # ── IAM — Task Role (runtime permissions) ──────────────────────
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: medpull-task-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: dynamodb-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt FormsTable.Arn
+
+  # ── Security Group — ALB ────────────────────────────────────────
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MedPull ALB — accepts HTTPS from anywhere
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  # ── Security Group — ECS Tasks ──────────────────────────────────
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MedPull ECS tasks — accepts 8000 from ALB only
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+
+  # ── Application Load Balancer ───────────────────────────────────
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: medpull-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: medpull-tg
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      HealthCheckTimeoutSeconds: 10
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ── ECS Task Definition ─────────────────────────────────────────
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: medpull-server
+      Cpu: "512"
+      Memory: "1024"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: medpull-server
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Secrets:
+            - Name: XAI_API_KEY
+              ValueFrom: !Sub "${AppSecrets}:XAI_API_KEY::"
+            - Name: MODEL_PRIMARY
+              ValueFrom: !Sub "${AppSecrets}:MODEL_PRIMARY::"
+            - Name: MODEL_FALLBACK
+              ValueFrom: !Sub "${AppSecrets}:MODEL_FALLBACK::"
+            - Name: MEDPULL_API_KEYS
+              ValueFrom: !Sub "${AppSecrets}:MEDPULL_API_KEYS::"
+            - Name: MEDPULL_KEY_MAP
+              ValueFrom: !Sub "${AppSecrets}:MEDPULL_KEY_MAP::"
+          Environment:
+            - Name: DYNAMODB_TABLE
+              Value: !Ref FormsTable
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+
+  # ── ECS Service ─────────────────────────────────────────────────
+  EcsService:
+    Type: AWS::ECS::Service
+    DependsOn: HttpsListener
+    Properties:
+      ServiceName: medpull-server
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref EcsSecurityGroup
+      LoadBalancers:
+        - ContainerName: medpull-server
+          ContainerPort: 8000
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  ApiUrl:
+    Description: ALB DNS name (use with HTTPS)
+    Value: !GetAtt LoadBalancer.DNSName
+
+  EcrRepoUri:
+    Description: ECR repository URI for pushing Docker images
+    Value: !GetAtt EcrRepository.RepositoryUri
+
+  DynamoTableName:
+    Description: DynamoDB table name
+    Value: !Ref FormsTable
