@@ -73,3 +73,14 @@
 # AppAuth
 -keep class net.openid.appauth.** { *; }
 -dontwarn net.openid.appauth.**
+
+# Optional transitive refs (not on Android classpath); see app/build/outputs/mapping/release/missing_rules.txt
+-dontwarn com.google.api.client.http.GenericUrl
+-dontwarn com.google.api.client.http.HttpHeaders
+-dontwarn com.google.api.client.http.HttpRequest
+-dontwarn com.google.api.client.http.HttpRequestFactory
+-dontwarn com.google.api.client.http.HttpResponse
+-dontwarn com.google.api.client.http.HttpTransport
+-dontwarn com.google.api.client.http.javanet.NetHttpTransport$Builder
+-dontwarn com.google.api.client.http.javanet.NetHttpTransport
+-dontwarn org.joda.time.Instant
