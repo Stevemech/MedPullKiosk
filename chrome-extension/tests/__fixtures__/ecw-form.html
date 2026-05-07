@@ -1,0 +1,79 @@
+<!--
+  Simplified eClinicalWorks-like form fixture for content-script tests.
+  Covers: text, select, textarea, checkbox, radio, date inputs,
+  various label strategies, hidden/invisible fields, required variants.
+-->
+<form id="ecw-encounter-form">
+
+  <!-- Text input with label[for] -->
+  <label for="patient_name">Patient Name</label>
+  <input type="text" id="patient_name" name="patient_name" required />
+
+  <!-- Select with options -->
+  <label for="blood_type">Blood Type</label>
+  <select id="blood_type" name="blood_type">
+    <option value="">Select…</option>
+    <option value="A+">A Positive</option>
+    <option value="B+">B Positive</option>
+    <option value="O-">O Negative</option>
+  </select>
+
+  <!-- Textarea with aria-label -->
+  <textarea id="chief_complaint" name="chief_complaint"
+            aria-label="Chief Complaint" placeholder="Describe…"></textarea>
+
+  <!-- Input wrapped in ancestor <label> -->
+  <label>
+    Date of Birth
+    <input type="date" id="dob" name="dob" />
+  </label>
+
+  <!-- Input with aria-labelledby -->
+  <span id="bp_label">Blood Pressure</span>
+  <input type="text" id="blood_pressure" name="blood_pressure"
+         aria-labelledby="bp_label" />
+
+  <!-- Checkbox -->
+  <label for="allergies_none">No Known Allergies</label>
+  <input type="checkbox" id="allergies_none" name="allergies_none" />
+
+  <!-- Hidden (should be skipped) -->
+  <input type="hidden" id="encounter_id" name="encounter_id" value="12345" />
+
+  <!-- Submit (should be skipped) -->
+  <input type="submit" value="Save" />
+
+  <!-- Button (should be skipped) -->
+  <input type="button" value="Cancel" />
+
+  <!-- Reset (should be skipped) -->
+  <input type="reset" value="Reset" />
+
+  <!-- Placeholder-only fallback label -->
+  <input type="text" id="notes" name="notes" placeholder="Additional notes…" />
+
+  <!-- Required via aria-required -->
+  <label for="diagnosis">Diagnosis</label>
+  <input type="text" id="diagnosis" name="diagnosis" aria-required="true" />
+
+  <!-- Required via .required class -->
+  <label for="provider">Provider</label>
+  <input type="text" id="provider" name="provider" class="required" />
+
+  <!-- display:none (should be skipped) -->
+  <input type="text" id="hidden_field" name="hidden_field" style="display:none" />
+
+  <!-- visibility:hidden (should be skipped) -->
+  <input type="text" id="invisible_field" name="invisible_field"
+         style="visibility:hidden" />
+
+  <!-- data-field-id fallback (no id) -->
+  <label for="medication">Current Medication</label>
+  <input type="text" data-field-id="medication" name="medication" />
+
+  <!-- Radio buttons -->
+  <label for="gender_m">Male</label>
+  <input type="radio" id="gender_m" name="gender" value="male" />
+  <label for="gender_f">Female</label>
+  <input type="radio" id="gender_f" name="gender" value="female" />
+</form>

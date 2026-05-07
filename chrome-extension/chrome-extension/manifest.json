@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "MedPull eClinicalWorks Assistant",
-  "version": "2.0.0",
-  "description": "AI-powered clinical transcript processing and eClinicalWorks form filling with clinician review and confirmation.",
+  "version": "3.0.0",
+  "description": "Autonomous AI-powered clinical transcript processing and eClinicalWorks form filling. Navigates eCW, finds patients, and fills charts without supervision.",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "alarms",
+    "tabs"
   ],
   "host_permissions": [
     "http://localhost:8000/*",
@@ -28,7 +30,8 @@
         "https://*.ecw.com/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "action": {

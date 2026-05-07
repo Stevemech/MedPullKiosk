@@ -1,11 +1,10 @@
 /**
  * popup.js — MedPull eClinicalWorks Assistant
  *
- * Two modes:
- *   1. Form Queue — polls server for pending/ready forms submitted by kiosk
- *   2. Manual Transcript — clinician pastes transcript directly
- *
- * Review panel and confirm flow are shared between both modes.
+ * Three tabs:
+ *   1. Autonomous — start/stop the auto-processing loop, live log
+ *   2. Form Queue — poll server for pending/ready forms (manual review)
+ *   3. Manual Transcript — paste transcript directly
  */
 
 /* ── DOM References ───────────────────────────────────────────── */
@@ -27,13 +26,24 @@ const formQueue = document.getElementById("formQueue");
 
 const settingsServerUrl = document.getElementById("settingsServerUrl");
 const settingsApiKey = document.getElementById("settingsApiKey");
+const settingsAutoSave = document.getElementById("settingsAutoSave");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const settingsSaved = document.getElementById("settingsSaved");
+
+const startAutoBtn = document.getElementById("startAutoBtn");
+const stopAutoBtn = document.getElementById("stopAutoBtn");
+const autoStatus = document.getElementById("autoStatus");
+const autoLog = document.getElementById("autoLog");
+const autoProgressFill = document.getElementById("autoProgressFill");
+const autoProgressText = document.getElementById("autoProgressText");
+const clearLogBtn = document.getElementById("clearLogBtn");
 
 /* ── State ────────────────────────────────────────────────────── */
 let currentDecisions = null;
 let currentFormId = null;
 let pollInterval = null;
+let logPollInterval = null;
+let lastLogLength = 0;
 
 /* ── Tab Switching ────────────────────────────────────────────── */
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -46,9 +56,10 @@ document.querySelectorAll(".tab").forEach((tab) => {
 });
 
 /* ── Settings ─────────────────────────────────────────────────── */
-chrome.storage.sync.get(["serverUrl", "apiKey"], (result) => {
+chrome.storage.sync.get(["serverUrl", "apiKey", "autoSave"], (result) => {
   if (result.serverUrl) settingsServerUrl.value = result.serverUrl;
   if (result.apiKey) settingsApiKey.value = result.apiKey;
+  settingsAutoSave.checked = !!result.autoSave;
 });
 
 saveSettingsBtn.addEventListener("click", () => {
@@ -56,6 +67,7 @@ saveSettingsBtn.addEventListener("click", () => {
     {
       serverUrl: settingsServerUrl.value.trim(),
       apiKey: settingsApiKey.value.trim(),
+      autoSave: settingsAutoSave.checked,
     },
     () => {
       settingsSaved.classList.remove("hidden");
@@ -83,9 +95,7 @@ async function checkServerHealth() {
       serverStatus.innerHTML = '<span class="status-dot"></span> Server Online';
       return true;
     }
-  } catch {
-    /* fall through */
-  }
+  } catch { /* fall through */ }
   serverStatus.className = "status-badge error";
   serverStatus.innerHTML = '<span class="status-dot"></span> Server Offline';
   return false;
@@ -96,7 +106,103 @@ checkServerHealth().then((online) => {
   if (online) loadFormQueue();
 });
 
-/* ── Input Handling (Manual tab) ──────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   Autonomous Mode
+   ══════════════════════════════════════════════════════════════════ */
+
+startAutoBtn.addEventListener("click", async () => {
+  startAutoBtn.disabled = true;
+  startAutoBtn.innerHTML = '<span class="spinner"></span> Starting…';
+
+  const resp = await chrome.runtime.sendMessage({
+    action: "startAutonomous",
+    payload: {},
+  });
+
+  if (resp?.data?.status === "already_running") {
+    startAutoBtn.disabled = false;
+    startAutoBtn.textContent = "Start Processing";
+  }
+
+  startLogPolling();
+});
+
+stopAutoBtn.addEventListener("click", async () => {
+  stopAutoBtn.disabled = true;
+  await chrome.runtime.sendMessage({ action: "stopAutonomous", payload: {} });
+});
+
+clearLogBtn.addEventListener("click", () => {
+  autoLog.innerHTML = '<div class="log-empty">Log cleared.</div>';
+  lastLogLength = 0;
+});
+
+function startLogPolling() {
+  if (logPollInterval) clearInterval(logPollInterval);
+  lastLogLength = 0;
+  logPollInterval = setInterval(refreshAutoState, 800);
+  refreshAutoState();
+}
+
+async function refreshAutoState() {
+  const resp = await chrome.runtime.sendMessage({
+    action: "getAutonomousState",
+    payload: {},
+  });
+  const state = resp?.data;
+  if (!state) return;
+
+  if (state.running) {
+    startAutoBtn.classList.add("hidden");
+    stopAutoBtn.classList.remove("hidden");
+    stopAutoBtn.disabled = false;
+    autoStatus.textContent = capitalize(state.step || "running");
+    autoStatus.className = "auto-status-badge running";
+  } else {
+    startAutoBtn.classList.remove("hidden");
+    startAutoBtn.disabled = false;
+    startAutoBtn.textContent = "Start Processing";
+    stopAutoBtn.classList.add("hidden");
+    autoStatus.textContent = "Idle";
+    autoStatus.className = "auto-status-badge idle";
+
+    if (logPollInterval) {
+      clearInterval(logPollInterval);
+      logPollInterval = null;
+    }
+  }
+
+  if (state.totalForms > 0) {
+    const pct = Math.round((state.formIndex / state.totalForms) * 100);
+    autoProgressFill.style.width = `${pct}%`;
+    autoProgressText.textContent = `${state.formIndex} / ${state.totalForms} forms`;
+  }
+
+  if (state.log && state.log.length > lastLogLength) {
+    const newEntries = state.log.slice(lastLogLength);
+    lastLogLength = state.log.length;
+
+    if (autoLog.querySelector(".log-empty")) autoLog.innerHTML = "";
+
+    for (const entry of newEntries) {
+      const div = document.createElement("div");
+      div.className = `log-entry log-${entry.level || "info"}`;
+      const time = new Date(entry.ts).toLocaleTimeString();
+      div.innerHTML = `<span class="log-time">${time}</span> ${escapeHTML(entry.text)}`;
+      autoLog.appendChild(div);
+    }
+    autoLog.scrollTop = autoLog.scrollHeight;
+  }
+}
+
+chrome.runtime.sendMessage({ action: "getAutonomousState", payload: {} }).then((resp) => {
+  if (resp?.data?.running) startLogPolling();
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Manual Input Handling
+   ══════════════════════════════════════════════════════════════════ */
+
 transcriptInput.addEventListener("input", () => updateProcessBtnState());
 
 fileUpload.addEventListener("change", (e) => {
@@ -115,9 +221,7 @@ fileUpload.addEventListener("change", (e) => {
 function updateProcessBtnState(serverOnline) {
   const hasText = transcriptInput.value.trim().length > 0;
   const online =
-    serverOnline !== undefined
-      ? serverOnline
-      : serverStatus.classList.contains("connected");
+    serverOnline !== undefined ? serverOnline : serverStatus.classList.contains("connected");
   processBtn.disabled = !(hasText && online);
 }
 
@@ -128,14 +232,11 @@ async function loadFormQueue() {
       action: "getFormQueue",
       payload: { status: "pending,ready" },
     });
-
     if (response.error) {
       formQueue.innerHTML = `<div class="message error">${escapeHTML(response.error)}</div>`;
       return;
     }
-
-    const forms = response.data.forms || [];
-    renderFormQueue(forms);
+    renderFormQueue(response.data.forms || []);
   } catch (err) {
     formQueue.innerHTML = `<div class="message error">Failed to load queue: ${escapeHTML(err.message)}</div>`;
   }
@@ -143,18 +244,14 @@ async function loadFormQueue() {
 
 function renderFormQueue(forms) {
   if (!forms || forms.length === 0) {
-    formQueue.innerHTML = '<div class="message info">No pending forms. Forms submitted from the kiosk will appear here.</div>';
+    formQueue.innerHTML = '<div class="message info">No pending forms.</div>';
     return;
   }
-
   formQueue.innerHTML = "";
   for (const f of forms) {
     const card = document.createElement("div");
     card.className = "queue-card";
-
     const statusClass = f.status === "ready" ? "ready" : "pending";
-    const createdDate = new Date(f.created_at).toLocaleString();
-
     card.innerHTML = `
       <div class="queue-card-header">
         <span class="queue-patient">Patient: ${escapeHTML(f.patient_id)}</span>
@@ -162,85 +259,9 @@ function renderFormQueue(forms) {
       </div>
       <div class="queue-card-meta">
         <span>Source: ${escapeHTML(f.source)}</span>
-        <span>${createdDate}</span>
-      </div>
-    `;
-
-    if (f.status === "ready") {
-      const btn = document.createElement("button");
-      btn.className = "btn btn-primary btn-sm";
-      btn.textContent = "Review Decisions";
-      btn.addEventListener("click", () => loadFormForReview(f.form_id));
-      card.appendChild(btn);
-    } else {
-      const btn = document.createElement("button");
-      btn.className = "btn btn-primary btn-sm";
-      btn.textContent = "Process Now";
-      btn.addEventListener("click", () => processQueuedForm(f.form_id));
-      card.appendChild(btn);
-    }
-
+        <span>${new Date(f.created_at).toLocaleString()}</span>
+      </div>`;
     formQueue.appendChild(card);
-  }
-}
-
-async function loadFormForReview(formId) {
-  hideError();
-  hideResult();
-  try {
-    const response = await chrome.runtime.sendMessage({
-      action: "getForm",
-      payload: { form_id: formId },
-    });
-
-    if (response.error) {
-      showError(response.error);
-      return;
-    }
-
-    currentFormId = formId;
-    currentDecisions = {
-      decisions: response.data.decisions || [],
-      missing_required: response.data.missing_required || [],
-    };
-    renderReviewPanel(currentDecisions);
-  } catch (err) {
-    showError(`Failed to load form: ${err.message}`);
-  }
-}
-
-async function processQueuedForm(formId) {
-  hideError();
-  hideResult();
-
-  const btn = event.target;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Processing…';
-
-  try {
-    const formSchema = await getFormSchemaFromTab();
-
-    const response = await chrome.runtime.sendMessage({
-      action: "processForm",
-      payload: { form_id: formId, form_schema: formSchema },
-    });
-
-    if (response.error) {
-      showError(response.error);
-      return;
-    }
-
-    currentFormId = formId;
-    currentDecisions = {
-      decisions: response.data.decisions || [],
-      missing_required: response.data.missing_required || [],
-    };
-    renderReviewPanel(currentDecisions);
-  } catch (err) {
-    showError(`Processing failed: ${err.message}`);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Process Now";
   }
 }
 
@@ -249,11 +270,8 @@ refreshBtn.addEventListener("click", () => {
   loadFormQueue();
 });
 
-/* Auto-poll every 30 seconds */
 pollInterval = setInterval(() => {
-  if (serverStatus.classList.contains("connected")) {
-    loadFormQueue();
-  }
+  if (serverStatus.classList.contains("connected")) loadFormQueue();
 }, 30000);
 
 /* ── Process & Fill (Manual tab) ──────────────────────────────── */
@@ -272,36 +290,20 @@ processBtn.addEventListener("click", async () => {
 
   try {
     const formSchema = await getFormSchemaFromTab();
-
-    /* Step 1: Submit the form */
     const submitResp = await chrome.runtime.sendMessage({
       action: "submitForm",
-      payload: {
-        patient_id: "manual-entry",
-        transcript,
-        source: "extension",
-        form_schema: formSchema,
-      },
+      payload: { patient_id: "manual-entry", transcript, source: "extension", form_schema: formSchema },
     });
-
-    if (submitResp.error) {
-      showError(submitResp.error);
-      return;
-    }
+    if (submitResp.error) { showError(submitResp.error); return; }
 
     const formId = submitResp.data.form_id;
     currentFormId = formId;
 
-    /* Step 2: Process via LLM */
     const processResp = await chrome.runtime.sendMessage({
       action: "processForm",
       payload: { form_id: formId, form_schema: formSchema },
     });
-
-    if (processResp.error) {
-      showError(processResp.error);
-      return;
-    }
+    if (processResp.error) { showError(processResp.error); return; }
 
     currentDecisions = {
       decisions: processResp.data.decisions || [],
@@ -317,48 +319,34 @@ processBtn.addEventListener("click", async () => {
   }
 });
 
-/* ── Get Form Schema from Active Tab ──────────────────────────── */
 async function getFormSchemaFromTab() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) return [];
-
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => {
-        if (typeof extractFormSchema === "function") return extractFormSchema();
-        return [];
-      },
+      func: () => typeof extractFormSchema === "function" ? extractFormSchema() : [],
     });
     return results?.[0]?.result || [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 /* ── Render Review Panel ──────────────────────────────────────── */
 function renderReviewPanel(data) {
   reviewPanel.innerHTML = "";
-
   if (!data || !data.decisions || data.decisions.length === 0) {
-    reviewPanel.innerHTML =
-      '<div class="message info">No field decisions returned. Verify the transcript and form schema.</div>';
+    reviewPanel.innerHTML = '<div class="message info">No field decisions returned.</div>';
     reviewSection.classList.remove("hidden");
     return;
   }
-
   for (const d of data.decisions) {
     const card = document.createElement("div");
     card.className = `decision-card ${d.action}`;
-
     const confPct = Math.round((d.confidence || 0) * 100);
     const confClass = confPct >= 75 ? "high" : confPct >= 50 ? "medium" : "low";
-
     let valueHTML = "";
-    if (d.action === "fill" && d.value !== null) {
+    if (d.action === "fill" && d.value !== null)
       valueHTML = `<div class="decision-value"><strong>Value:</strong> ${escapeHTML(d.value)}</div>`;
-    }
-
     card.innerHTML = `
       <div class="decision-header">
         <span class="decision-label">${escapeHTML(d.label || d.field_id)}</span>
@@ -366,13 +354,9 @@ function renderReviewPanel(data) {
       </div>
       ${valueHTML}
       <div class="decision-reasoning">${escapeHTML(d.reasoning)}</div>
-      <div class="confidence-bar">
-        <div class="confidence-fill ${confClass}" style="width: ${confPct}%"></div>
-      </div>
-    `;
+      <div class="confidence-bar"><div class="confidence-fill ${confClass}" style="width:${confPct}%"></div></div>`;
     reviewPanel.appendChild(card);
   }
-
   if (data.missing_required && data.missing_required.length > 0) {
     missingList.innerHTML = "";
     for (const field of data.missing_required) {
@@ -384,7 +368,6 @@ function renderReviewPanel(data) {
   } else {
     missingRequired.classList.add("hidden");
   }
-
   reviewSection.classList.remove("hidden");
   confirmBtn.classList.remove("hidden");
   confirmBtn.disabled = false;
@@ -393,46 +376,22 @@ function renderReviewPanel(data) {
 /* ── Confirm & Fill eClinicalWorks ────────────────────────────── */
 confirmBtn.addEventListener("click", async () => {
   if (!currentDecisions || !currentFormId) return;
-
   confirmBtn.disabled = true;
   confirmBtn.innerHTML = '<span class="spinner"></span> Filling…';
   hideError();
-
   try {
-    /* Step 1: Claim the form */
-    const claimResp = await chrome.runtime.sendMessage({
-      action: "claimForm",
-      payload: { form_id: currentFormId },
-    });
-
-    if (claimResp.error) {
-      showError(claimResp.error);
-      return;
-    }
-
-    /* Step 2: Send decisions to content script for DOM filling */
+    await chrome.runtime.sendMessage({ action: "claimForm", payload: { form_id: currentFormId } });
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) {
-      showError("No active tab found. Navigate to eClinicalWorks first.");
-      return;
-    }
-
+    if (!tab) { showError("No active tab found."); return; }
     const fillResult = await chrome.tabs.sendMessage(tab.id, {
       action: "fillAndHighlight",
       decisions: currentDecisions.decisions,
     });
-
     if (fillResult && fillResult.success) {
-      /* Step 3: Mark form as completed */
-      await chrome.runtime.sendMessage({
-        action: "completeForm",
-        payload: { form_id: currentFormId },
-      });
-
+      await chrome.runtime.sendMessage({ action: "completeForm", payload: { form_id: currentFormId } });
       showResult({ success: true, filled: fillResult.filled || 0 });
     } else {
-      const errors = (fillResult && fillResult.errors) || ["Unknown fill error"];
-      showResult({ success: false, errors });
+      showResult({ success: false, errors: fillResult?.errors || ["Unknown error"] });
     }
   } catch (err) {
     showError(`Fill failed: ${err.message}`);
@@ -442,37 +401,19 @@ confirmBtn.addEventListener("click", async () => {
   }
 });
 
-/* ── Show Execution Result ────────────────────────────────────── */
+/* ── UI Helpers ───────────────────────────────────────────────── */
 function showResult(result) {
   executionResult.classList.remove("hidden");
-
   if (result.success) {
     resultMessage.className = "message success";
-    resultMessage.textContent = `Fields filled successfully (${result.filled || 0} fields). Please verify in eClinicalWorks before saving.`;
+    resultMessage.textContent = `Fields filled successfully (${result.filled || 0} fields). Verify in eCW before saving.`;
   } else {
     resultMessage.className = "message error";
-    const errText = (result.errors || []).join("; ") || "Unknown error";
-    resultMessage.textContent = `Some fields failed: ${errText}`;
+    resultMessage.textContent = `Some fields failed: ${(result.errors || []).join("; ")}`;
   }
 }
-
-function hideResult() {
-  executionResult.classList.add("hidden");
-}
-
-/* ── Error Helpers ────────────────────────────────────────────── */
-function showError(msg) {
-  errorMessage.textContent = msg;
-  errorMessage.classList.remove("hidden");
-}
-
-function hideError() {
-  errorMessage.classList.add("hidden");
-}
-
-/* ── Utilities ────────────────────────────────────────────────── */
-function escapeHTML(str) {
-  const div = document.createElement("div");
-  div.textContent = str || "";
-  return div.innerHTML;
-}
+function hideResult() { executionResult.classList.add("hidden"); }
+function showError(msg) { errorMessage.textContent = msg; errorMessage.classList.remove("hidden"); }
+function hideError() { errorMessage.classList.add("hidden"); }
+function escapeHTML(str) { const d = document.createElement("div"); d.textContent = str || ""; return d.innerHTML; }
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : ""; }

@@ -5,6 +5,7 @@ Central hub deployed on AWS ECS that both the Android kiosk app and the
 Chrome extension communicate with. Provides:
   - Form queue CRUD (POST/GET /forms, claim, complete)
   - LLM processing via /forms/{form_id}/process
+  - Grok-powered page navigation via POST /navigate
   - Legacy /process endpoint for backward compatibility
   - Health check at GET /health
 
@@ -39,6 +40,8 @@ from form_store import (
 )
 from input_adapter import RawTextAdapter
 from llm_router import process_transcript
+from nav_schema import NavigateRequest, NavigateResponse
+from nav_router import analyze_page
 
 # ── Logging ───────────────────────────────────────────────────────
 logging.basicConfig(
@@ -258,3 +261,32 @@ async def complete_single_form(
 
     record = await complete_form(clinic_id, form_id)
     return record
+
+
+# ── Navigation Endpoint (Grok-powered page analysis) ─────────────
+
+@app.post("/navigate", response_model=NavigateResponse)
+async def navigate_page(
+    request: NavigateRequest,
+    clinic_id: str = Depends(verify_api_key),
+) -> NavigateResponse:
+    """
+    Analyze a page snapshot and return the next browser action to achieve a goal.
+
+    The Chrome extension sends a structured DOM snapshot of the current
+    eClinicalWorks page plus a plain-English goal. Grok analyzes the page
+    and returns one action (click, type, select, wait, done, or error).
+    """
+    logger.info(
+        "POST /navigate — clinic: %s, goal: %s, elements: %d",
+        clinic_id,
+        request.goal[:80],
+        len(request.page_snapshot.elements),
+    )
+
+    try:
+        result = await analyze_page(request)
+        return result
+    except Exception as e:
+        logger.error("Navigation analysis failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Navigation failed: {e}") from e

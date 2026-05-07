@@ -1,0 +1,45 @@
+"""ECW integration layer: abstract interface, client stubs, and data models."""
+
+from ecw.base import BaseECWClient, ECWAuthError, ECWAPIError
+from ecw.models import (
+    PatientRecord,
+    Demographics,
+    InsuranceInfo,
+    EmergencyContact,
+    AllergyItem,
+    AllergyItemToAdd,
+    MedicationItem,
+    ProblemListItem,
+    FamilyHistoryItem,
+    SocialHistory,
+    Vitals,
+    ChiefComplaint,
+    HistoryOfPresentIllness,
+    ReviewOfSystems,
+    AppointmentRequest,
+    UpdateMedHxAllergyRequest,
+    PatientIntakePayload,
+)
+
+__all__ = [
+    "BaseECWClient",
+    "ECWAuthError",
+    "ECWAPIError",
+    "PatientRecord",
+    "Demographics",
+    "InsuranceInfo",
+    "EmergencyContact",
+    "AllergyItem",
+    "AllergyItemToAdd",
+    "MedicationItem",
+    "ProblemListItem",
+    "FamilyHistoryItem",
+    "SocialHistory",
+    "Vitals",
+    "ChiefComplaint",
+    "HistoryOfPresentIllness",
+    "ReviewOfSystems",
+    "AppointmentRequest",
+    "UpdateMedHxAllergyRequest",
+    "PatientIntakePayload",
+]
