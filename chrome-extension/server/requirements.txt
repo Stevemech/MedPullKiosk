@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-litellm
-pydantic
-python-dotenv
-aioboto3
-ulid-py
